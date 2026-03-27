@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/desk-scene.tsx","./src/components/question-fields.tsx","./src/lib/api.ts","./src/lib/cn.ts","./src/lib/mock-survey.ts","./src/state/survey-context.tsx","./src/state/survey-engine.ts","./src/state/survey-reducer.ts"],"version":"5.9.3"}

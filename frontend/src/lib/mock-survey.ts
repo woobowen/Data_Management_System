@@ -1,0 +1,81 @@
+import type { SurveyDefinition } from '../state/survey-engine';
+
+export const mockSurvey: SurveyDefinition = {
+  surveyId: 'desk-survey-001',
+  title: '调查员工作台问卷',
+  description: '请像批阅实体卷宗一样完成这份桌面问卷。',
+  questions: [
+    {
+      questionId: 'q1',
+      type: 'single_choice',
+      title: '今日的案卷属于哪一类？',
+      isRequired: true,
+      order: 1,
+      options: [
+        { optionId: 'archive', text: '旧档复核' },
+        { optionId: 'field', text: '外勤回访' },
+        { optionId: 'incident', text: '紧急事件' },
+      ],
+      logicRules: [
+        { condition: 'eq', targetValue: 'archive', nextQuestionId: 'q2' },
+        { condition: 'eq', targetValue: 'field', nextQuestionId: 'q3' },
+        { condition: 'eq', targetValue: 'incident', nextQuestionId: 'q4' },
+      ],
+      defaultNextQuestionId: 'END',
+    },
+    {
+      questionId: 'q2',
+      type: 'text',
+      title: '请记录旧档复核的核心备注。',
+      isRequired: true,
+      order: 2,
+      validation: { minLength: 4, maxLength: 120 },
+      defaultNextQuestionId: 'q5',
+    },
+    {
+      questionId: 'q3',
+      type: 'number',
+      title: '预计外勤回访耗时（小时）。',
+      isRequired: true,
+      order: 3,
+      validation: { min: 1, max: 24, isInteger: true },
+      defaultNextQuestionId: 'q5',
+    },
+    {
+      questionId: 'q4',
+      type: 'multi_choice',
+      title: '紧急事件涉及哪些信号？',
+      isRequired: true,
+      order: 4,
+      options: [
+        { optionId: 'sig-a', text: '现场封锁' },
+        { optionId: 'sig-b', text: '证物保全' },
+        { optionId: 'sig-c', text: '医疗待命' },
+      ],
+      validation: { minSelected: 1, maxSelected: 3 },
+      defaultNextQuestionId: 'q5',
+    },
+    {
+      questionId: 'q5',
+      type: 'single_choice',
+      title: '此卷宗是否需要主管复签？',
+      isRequired: true,
+      order: 5,
+      options: [
+        { optionId: 'yes', text: '需要复签' },
+        { optionId: 'no', text: '无需复签' },
+      ],
+      logicRules: [{ condition: 'eq', targetValue: 'yes', nextQuestionId: 'q6' }],
+      defaultNextQuestionId: 'END',
+    },
+    {
+      questionId: 'q6',
+      type: 'text',
+      title: '补充需要复签的原因。',
+      isRequired: true,
+      order: 6,
+      validation: { minLength: 6, maxLength: 160 },
+      defaultNextQuestionId: 'END',
+    },
+  ],
+};

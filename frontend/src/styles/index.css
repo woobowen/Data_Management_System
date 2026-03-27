@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=Kalam:wght@400;700&family=Ma+Shan+Zheng&family=Zhi+Mang+Xing&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #1a2b3c;
+  background: #f0efeb;
+  font-family: "IBM Plex Sans", sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #f0efeb;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(circle at 50% 36%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0) 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0));
+  opacity: 0.9;
+}
+
+.ink-text {
+  color: #1a2b3c;
+  text-shadow: 0 0 1px rgba(26, 43, 60, 0.3);
+}
+
+.living-bg {
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0) 28%),
+    linear-gradient(180deg, #f5f4f0 0%, #f0efeb 42%, #eceae4 100%);
+}
+
+.paper-noise {
+  background-image:
+    radial-gradient(circle at 14% 24%, rgba(255, 255, 255, 0.72) 0 1px, transparent 1.2px),
+    radial-gradient(circle at 80% 38%, rgba(70, 60, 52, 0.06) 0 1px, transparent 1.2px),
+    radial-gradient(circle at 47% 70%, rgba(80, 68, 52, 0.05) 0 1px, transparent 1.1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(222, 214, 200, 0.18));
+  background-size: 120px 120px, 140px 140px, 160px 160px, auto;
+}
+
+.parchment-stage {
+  perspective: 2200px;
+  perspective-origin: center 38%;
+}
+
+.paper-sheet {
+  background-color: #f9f8f6;
+  border: 1px solid rgba(230, 224, 214, 0.9);
+  box-shadow:
+    20px 20px 60px rgba(0, 0, 0, 0.05),
+    0 4px 10px rgba(0, 0, 0, 0.025),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
+.paper-halo {
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    inset 0 20px 34px rgba(255, 255, 255, 0.3);
+}
+
+.paper-emboss {
+  background: linear-gradient(180deg, rgba(248, 246, 241, 0.96), rgba(244, 241, 234, 0.96));
+  box-shadow:
+    -4px -4px 10px rgba(255, 255, 255, 0.8),
+    4px 4px 10px rgba(0, 0, 0, 0.04);
+}
+
+.paper-deboss {
+  background: linear-gradient(180deg, rgba(242, 239, 232, 0.98), rgba(237, 233, 225, 0.98));
+  box-shadow:
+    inset -4px -4px 10px rgba(255, 255, 255, 0.75),
+    inset 4px 4px 10px rgba(0, 0, 0, 0.06);
+}
+
+.paper-entry {
+  border: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.18)),
+    rgba(245, 243, 237, 0.92);
+  box-shadow:
+    inset -4px -4px 12px rgba(255, 255, 255, 0.7),
+    inset 4px 4px 12px rgba(26, 43, 60, 0.05);
+}
+
+.ink-input {
+  caret-color: #1a2b3c;
+  border: 0;
+}
+
+.ink-input::placeholder {
+  color: rgba(26, 43, 60, 0.34);
+}
+
+.parchment-smudge {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.18)),
+    rgba(245, 243, 237, 0.92);
+  box-shadow:
+    inset -4px -4px 12px rgba(255, 255, 255, 0.7),
+    inset 4px 4px 12px rgba(26, 43, 60, 0.05);
+  transition: color 300ms ease, filter 300ms ease, opacity 300ms ease;
+}
+
+.parchment-smudge[data-erasing='true'] {
+  color: rgba(90, 98, 108, 0.44);
+  filter: blur(0.8px);
+  opacity: 0.7;
+}

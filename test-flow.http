@@ -1,0 +1,162 @@
+@baseUrl = http://127.0.0.1:3000
+@username = stage1_owner
+@password = password123
+
+### 健康检查
+GET {{baseUrl}}/health
+
+### 注册
+# @name register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### 登录
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### 创建空白草稿
+# @name createSurvey
+POST {{baseUrl}}/api/surveys
+Authorization: Bearer {{login.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "title": "阶段一联调问卷",
+  "description": "用于后端全链路裸测",
+  "allowAnonymous": true,
+  "deadlineAt": null,
+  "questions": []
+}
+
+### 修改草稿：添加 single_choice、multi_choice、number，并配置 logicRules
+# 逻辑说明：
+# q1 选 optA -> 跳到 q2（数字题）
+# q1 选 optB -> 跳到 q3（多选题）
+# q2 / q3 -> END
+PUT {{baseUrl}}/api/surveys/{{createSurvey.response.body.$.data._id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "title": "阶段一联调问卷",
+  "description": "用于后端全链路裸测",
+  "allowAnonymous": true,
+  "deadlineAt": null,
+  "questions": [
+    {
+      "questionId": "q1",
+      "type": "single_choice",
+      "title": "你当前是否已就业？",
+      "isRequired": true,
+      "order": 1,
+      "options": [
+        { "optionId": "optA", "text": "是" },
+        { "optionId": "optB", "text": "否" }
+      ],
+      "validation": {},
+      "logicRules": [
+        { "condition": "eq", "targetValue": "optA", "nextQuestionId": "q2" },
+        { "condition": "eq", "targetValue": "optB", "nextQuestionId": "q3" }
+      ],
+      "defaultNextQuestionId": "END"
+    },
+    {
+      "questionId": "q2",
+      "type": "number",
+      "title": "你的工龄（年）",
+      "isRequired": true,
+      "order": 2,
+      "options": [],
+      "validation": {
+        "min": 0,
+        "max": 50,
+        "isInteger": true
+      },
+      "logicRules": [],
+      "defaultNextQuestionId": "END"
+    },
+    {
+      "questionId": "q3",
+      "type": "multi_choice",
+      "title": "你目前的状态是？",
+      "isRequired": true,
+      "order": 3,
+      "options": [
+        { "optionId": "m1", "text": "在找工作" },
+        { "optionId": "m2", "text": "继续深造" },
+        { "optionId": "m3", "text": "暂时休息" }
+      ],
+      "validation": {
+        "minSelected": 1,
+        "maxSelected": 2
+      },
+      "logicRules": [],
+      "defaultNextQuestionId": "END"
+    }
+  ]
+}
+
+### 发布问卷
+# @name publishSurvey
+POST {{baseUrl}}/api/surveys/{{createSurvey.response.body.$.data._id}}/publish
+Authorization: Bearer {{login.response.body.$.data.token}}
+
+### 查看填写端公开定义
+GET {{baseUrl}}/api/surveys/{{createSurvey.response.body.$.data._id}}/render
+
+### 模拟填写者 A：合法答卷
+# 路径：q1=optB -> q3，多选 2 项，合法
+# @name submitValid
+POST {{baseUrl}}/api/surveys/{{createSurvey.response.body.$.data._id}}/submit
+Content-Type: application/json
+
+{
+  "answers": [
+    {
+      "questionId": "q1",
+      "type": "single_choice",
+      "value": "optB"
+    },
+    {
+      "questionId": "q3",
+      "type": "multi_choice",
+      "value": ["m1", "m2"]
+    }
+  ]
+}
+
+### 模拟填写者 B：非法答卷
+# 非法点：q1=optA 时真实路径应当进入 q2，这里故意提交 q3，预期 400
+# @name submitInvalid
+POST {{baseUrl}}/api/surveys/{{createSurvey.response.body.$.data._id}}/submit
+Content-Type: application/json
+
+{
+  "answers": [
+    {
+      "questionId": "q1",
+      "type": "single_choice",
+      "value": "optA"
+    },
+    {
+      "questionId": "q3",
+      "type": "multi_choice",
+      "value": ["m1"]
+    }
+  ]
+}
+
+### 获取统计结果
+GET {{baseUrl}}/api/statistics/surveys/{{createSurvey.response.body.$.data._id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
