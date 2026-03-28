@@ -1,7 +1,9 @@
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 
 import { ApiClientError } from '../lib/api';
+import { useAuth } from '../contexts/auth-context';
 import { useSurvey } from '../state/survey-context';
 import type { QuestionValue } from '../state/survey-engine';
 import { QuestionFields } from './question-fields';
@@ -85,10 +87,9 @@ export function DeskScene() {
   const [flipPhase, setFlipPhase] = useState<FlipPhase>('idle');
   const [targetQuestionId, setTargetQuestionId] = useState<string | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
-  const [surveyId] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('surveyId') ?? import.meta.env.VITE_DEFAULT_SURVEY_ID ?? '';
-  });
+  const { surveyId = '' } = useParams();
+  const location = useLocation();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (!surveyId) {
@@ -142,6 +143,26 @@ export function DeskScene() {
       <div className="living-bg flex min-h-screen items-center justify-center px-6">
         <div className="paper-sheet paper-noise rounded-md px-8 py-7 font-hand text-[2.3rem] ink-text">
           正在摊开活页羊皮卷……
+        </div>
+      </div>
+    );
+  }
+
+  if (!state.engine.survey.allowAnonymous && !isAuthenticated) {
+    return (
+      <div className="living-bg flex min-h-screen items-center justify-center px-6">
+        <div className="paper-sheet paper-noise max-w-2xl rounded-md px-8 py-7">
+          <p className="font-body text-xs uppercase tracking-[0.34em] text-ink/38">登录后填写</p>
+          <p className="mt-4 font-hand text-[2.2rem] leading-[1.45] ink-text">这份问卷要求登录后填写，请先登录再返回当前链接。</p>
+          <div className="mt-6">
+            <Link
+              to="/login"
+              state={{ from: location.pathname }}
+              className="inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              前往登录
+            </Link>
+          </div>
         </div>
       </div>
     );

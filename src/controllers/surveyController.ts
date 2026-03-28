@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 
 import { asyncHandler } from '../lib/asyncHandler';
 import { surveyPayloadSchema } from '../lib/schemas';
-import { createSurvey, getOwnerSurveyById, listOwnerSurveys, publishSurvey, updateSurvey } from '../services/surveyService';
+import { closeSurvey, createSurvey, getOwnerSurveyById, listOwnerSurveys, publishSurvey, updateSurvey } from '../services/surveyService';
 
 export const createSurveyController = asyncHandler(async (req: Request, res: Response) => {
   const payload = surveyPayloadSchema.parse(req.body);
@@ -50,6 +50,17 @@ export const publishSurveyController = asyncHandler(async (req: Request, res: Re
     data: {
       survey,
       shareLink: `/api/surveys/${survey._id.toString()}/render`,
+    },
+  });
+});
+
+export const closeSurveyController = asyncHandler(async (req: Request, res: Response) => {
+  const survey = await closeSurvey(req.user!.userId, String(req.params.id));
+  res.json({
+    code: 200,
+    message: '问卷关闭成功',
+    data: {
+      survey,
     },
   });
 });

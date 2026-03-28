@@ -8,6 +8,70 @@ const api = axios.create({
   timeout: 8000,
 });
 
+export type AuthUser = {
+  id: string;
+  username: string;
+};
+
+export type SurveyQuestionInput = {
+  questionId: string;
+  type: 'single_choice' | 'multi_choice' | 'text' | 'number';
+  title: string;
+  isRequired: boolean;
+  order: number;
+  options?: Array<{ optionId: string; text: string }>;
+  validation?: {
+    minSelected?: number;
+    maxSelected?: number;
+    minLength?: number;
+    maxLength?: number;
+    min?: number;
+    max?: number;
+    isInteger?: boolean;
+  };
+  logicRules?: Array<{
+    condition: 'eq' | 'gt' | 'lt' | 'includes';
+    targetValue: unknown;
+    nextQuestionId: string;
+  }>;
+  defaultNextQuestionId?: string;
+};
+
+export type SurveyPayload = {
+  title: string;
+  description: string;
+  allowAnonymous: boolean;
+  deadlineAt: string | null;
+  questions: SurveyQuestionInput[];
+};
+
+export type SurveySummary = {
+  _id: string;
+  title: string;
+  description: string;
+  status: 'draft' | 'published' | 'closed';
+  allowAnonymous: boolean;
+  deadlineAt: string | null;
+  questions: SurveyQuestionInput[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type StatisticsQuestion = {
+  questionId: string;
+  type: string;
+  title: string;
+  optionCounts: Array<{ questionId: string; optionId: string; count: number }>;
+  average: number | null;
+  responseCount: number;
+  textValues: string[];
+};
+
+export type SurveyStatistics = {
+  surveyId: string;
+  questions: StatisticsQuestion[];
+};
+
 export class ApiClientError extends Error {
   status?: number;
 
@@ -27,6 +91,103 @@ function normalizeApiError(error: unknown): never {
     throw new ApiClientError(message, error.response?.status);
   }
   throw error;
+}
+
+export function setAuthToken(token: string | null) {
+  if (token) {
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common.Authorization;
+  }
+}
+
+export async function registerUser(username: string, password: string) {
+  try {
+    const response = await api.post<{ code: number; message: string; data: { id: string; username: string; createdAt: string } }>(
+      '/api/auth/register',
+      { username, password },
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function loginUser(username: string, password: string) {
+  try {
+    const response = await api.post<{ code: number; message: string; data: { token: string; user: AuthUser } }>(
+      '/api/auth/login',
+      { username, password },
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function listMySurveys(): Promise<SurveySummary[]> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: SurveySummary[] }>('/api/surveys');
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function getMySurvey(surveyId: string): Promise<SurveySummary> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: SurveySummary }>(`/api/surveys/${surveyId}`);
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function createSurvey(payload: SurveyPayload): Promise<SurveySummary> {
+  try {
+    const response = await api.post<{ code: number; message: string; data: SurveySummary }>('/api/surveys', payload);
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function updateSurvey(surveyId: string, payload: SurveyPayload): Promise<SurveySummary> {
+  try {
+    const response = await api.put<{ code: number; message: string; data: SurveySummary }>(`/api/surveys/${surveyId}`, payload);
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function publishSurvey(surveyId: string) {
+  try {
+    const response = await api.post<{ code: number; message: string; data: { survey: SurveySummary; shareLink: string } }>(
+      `/api/surveys/${surveyId}/publish`,
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function closeSurvey(surveyId: string) {
+  try {
+    const response = await api.post<{ code: number; message: string; data: { survey: SurveySummary } }>(`/api/surveys/${surveyId}/close`);
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function getSurveyStatistics(surveyId: string): Promise<SurveyStatistics> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: SurveyStatistics }>(`/api/statistics/surveys/${surveyId}`);
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
 }
 
 export async function fetchSurveyDefinition(surveyId: string): Promise<SurveyDefinition> {

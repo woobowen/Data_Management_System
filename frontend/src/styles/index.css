@@ -23,6 +23,10 @@ body {
   background: #f0efeb;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body::before {
   position: fixed;
   inset: 0;

@@ -38,6 +38,9 @@ export type SurveyDefinition = {
   surveyId: string;
   title: string;
   description?: string;
+  status?: 'draft' | 'published' | 'closed';
+  allowAnonymous?: boolean;
+  deadlineAt?: string | null;
   questions: QuestionValue[];
 };
 

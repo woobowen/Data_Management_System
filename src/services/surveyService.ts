@@ -304,6 +304,17 @@ export const publishSurvey = async (ownerId: string, surveyId: string) => {
   return survey;
 };
 
+export const closeSurvey = async (ownerId: string, surveyId: string) => {
+  const survey = await getOwnerSurveyById(ownerId, surveyId);
+  if (survey.status !== 'published') {
+    throw new ApiError(400, '只有发布态问卷可以关闭');
+  }
+
+  survey.status = 'closed';
+  await survey.save();
+  return survey;
+};
+
 export const getRenderableSurvey = async (surveyId: string) => {
   const survey = await SurveyModel.findById(surveyId).lean();
   if (!survey) {
