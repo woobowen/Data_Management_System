@@ -123,6 +123,7 @@ export function replayFromStart(answerMap: AnswerMap, survey: SurveyDefinition):
   const visitedSet = new Set<string>();
   let currentQuestionId = orderedQuestions[0]?.questionId ?? null;
   let currentReachableQuestionId: string | null = currentQuestionId;
+  let lockedReachableQuestionId: string | null = null;
   let hasLoop = false;
 
   while (currentQuestionId && currentQuestionId !== END) {
@@ -139,14 +140,25 @@ export function replayFromStart(answerMap: AnswerMap, survey: SurveyDefinition):
     visitedSet.add(currentQuestionId);
     canonicalPath.push(currentQuestionId);
 
-    const answer = answerMap[currentQuestionId];
+    const answer = lockedReachableQuestionId ? undefined : answerMap[currentQuestionId];
     if (!answer || isBlankValue(answer.value)) {
-      currentReachableQuestionId = currentQuestionId;
-      break;
+      if (!lockedReachableQuestionId) {
+        lockedReachableQuestionId = currentQuestionId;
+        currentReachableQuestionId = currentQuestionId;
+      }
+
+      if ((question.logicRules?.length ?? 0) > 0) {
+        break;
+      }
+
+      currentQuestionId = question.defaultNextQuestionId || END;
+      continue;
     }
 
     currentQuestionId = resolveNextQuestionId(question, answer);
-    currentReachableQuestionId = currentQuestionId === END ? null : currentQuestionId;
+    if (!lockedReachableQuestionId) {
+      currentReachableQuestionId = currentQuestionId === END ? null : currentQuestionId;
+    }
   }
 
   const canonicalSet = new Set(canonicalPath);

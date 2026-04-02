@@ -223,16 +223,19 @@ export function DeskScene() {
         markArchiveComplete(displayedQuestionId ?? targetQuestionId);
       }
       setDisplayedQuestionId(targetQuestionId);
-      setFlipPhase('forward-in');
+      setFlipPhase('idle');
+      setTargetQuestionId(null);
       return;
     }
 
     if (flipPhase === 'backward-out') {
       if (targetQuestionId) {
         retrieveHistory(targetQuestionId);
+        markRetrieveComplete(targetQuestionId);
       }
       setDisplayedQuestionId(targetQuestionId);
-      setFlipPhase('backward-in');
+      setFlipPhase('idle');
+      setTargetQuestionId(null);
       return;
     }
 
@@ -243,9 +246,6 @@ export function DeskScene() {
     }
 
     if (flipPhase === 'backward-in') {
-      if (displayedQuestionId && displayedQuestionId !== COMPLETION_CARD_ID) {
-        markRetrieveComplete(displayedQuestionId);
-      }
       setFlipPhase('idle');
       setTargetQuestionId(null);
     }
@@ -281,7 +281,7 @@ export function DeskScene() {
 
         <main className="parchment-stage relative flex flex-1 items-center justify-center">
           <motion.article
-            key={`${displayedQuestionId}-${flipPhase}`}
+            key={displayedQuestionId ?? COMPLETION_CARD_ID}
             initial={false}
             animate={paperAnimate}
             transition={{ duration: 0.88, ease: [0.22, 0.76, 0.2, 1] }}
