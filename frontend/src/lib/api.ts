@@ -65,6 +65,7 @@ export type QuestionTemplatePayload = {
   description: string;
   type: 'single_choice' | 'multi_choice' | 'text' | 'number';
   isRequired: boolean;
+  versionRemark?: string;
   options?: Array<{ optionId: string; text: string }>;
   validation?: {
     minSelected?: number;
@@ -83,6 +84,7 @@ export type QuestionTemplateSummary = {
   rootTemplateId: string;
   version: number;
   previousTemplateId?: string | null;
+  versionRemark: string;
   title: string;
   description: string;
   type: 'single_choice' | 'multi_choice' | 'text' | 'number';
@@ -300,10 +302,14 @@ export async function listQuestionTemplateVersions(templateId: string): Promise<
   }
 }
 
-export async function restoreQuestionTemplateVersion(templateId: string): Promise<QuestionTemplateSummary> {
+export async function restoreQuestionTemplateVersion(
+  templateId: string,
+  payload: { versionRemark?: string } = {},
+): Promise<QuestionTemplateSummary> {
   try {
     const response = await api.post<{ code: number; message: string; data: QuestionTemplateSummary }>(
       `/api/questions/${templateId}/restore`,
+      payload,
     );
     return response.data.data;
   } catch (error) {

@@ -51,12 +51,17 @@ export const questionTemplatePayloadSchema = z.object({
   description: z.string().default(''),
   type: z.enum(['single_choice', 'multi_choice', 'text', 'number']),
   isRequired: z.boolean().default(false),
+  versionRemark: z.string().max(100).default(''),
   options: z.array(optionSchema).default([]),
   validation: questionValidationSchema.default({}),
 });
 
 export const shareQuestionTemplateSchema = z.object({
   usernames: z.array(z.string().min(3)).default([]),
+});
+
+export const restoreQuestionTemplateSchema = z.object({
+  versionRemark: z.string().max(100).default(''),
 });
 
 export const registerSchema = z.object({

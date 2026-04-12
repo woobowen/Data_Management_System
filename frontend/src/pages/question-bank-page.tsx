@@ -24,6 +24,7 @@ import { FieldLabel, PageCard, PrimaryButton, SecondaryButton, SectionTitle, Sel
 const createEmptyTemplateForm = (): QuestionTemplatePayload => ({
   title: '',
   description: '',
+  versionRemark: '',
   type: 'single_choice',
   isRequired: false,
   options: [
@@ -44,11 +45,19 @@ function toTemplateForm(template: QuestionTemplateSummary): QuestionTemplatePayl
   return {
     title: template.title,
     description: template.description ?? '',
+    versionRemark: '',
     type: template.type,
     isRequired: template.isRequired,
     options: (template.options ?? []).map((option) => ({ optionId: option.optionId, text: option.text })),
     validation: { ...(template.validation ?? {}) },
   };
+}
+
+function formatDateTime(value?: string) {
+  if (!value) {
+    return '未知时间';
+  }
+  return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
 function renderValidationSummary(template: QuestionTemplateSummary) {
@@ -99,6 +108,7 @@ export function QuestionBankPage() {
   const [sharingLoading, setSharingLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [historyRemarkByTemplate, setHistoryRemarkByTemplate] = useState<Record<string, string>>({});
   const [sharedUsernamesByTemplate, setSharedUsernamesByTemplate] = useState<Record<string, string[]>>({});
   const [versionHistoryByTemplate, setVersionHistoryByTemplate] = useState<Record<string, QuestionTemplateSummary[]>>({});
   const [usageByTemplate, setUsageByTemplate] = useState<Record<string, QuestionTemplateUsageResult>>({});
@@ -168,6 +178,7 @@ export function QuestionBankPage() {
     try {
       const payload: QuestionTemplatePayload = {
         ...form,
+        versionRemark: (form.versionRemark ?? '').trim(),
         options:
           form.type === 'single_choice' || form.type === 'multi_choice'
             ? (form.options ?? []).map((option) => ({
@@ -181,7 +192,8 @@ export function QuestionBankPage() {
       if (editingTemplateId) {
         const updated = await updateQuestionTemplate(editingTemplateId, payload);
         await reloadTemplates();
-        setInfoMessage(`题库题目已生成新版本：${updated.title}（v${updated.version}）`);
+        const remark = updated.versionRemark ? `（备注：${updated.versionRemark}）` : '';
+        setInfoMessage(`题库题目已更新当前生效版本：${updated.title}${remark}`);
       } else {
         const created = await createQuestionTemplate(payload);
         setTemplates((current) => [created, ...current]);
@@ -243,6 +255,7 @@ export function QuestionBankPage() {
     try {
       const versions = await listQuestionTemplateVersions(templateId);
       setVersionHistoryByTemplate((current) => ({ ...current, [templateId]: versions }));
+      setHistoryRemarkByTemplate((current) => ({ ...current, [templateId]: '' }));
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : '加载版本历史失败');
       setHistoryTemplateId(null);
@@ -251,16 +264,19 @@ export function QuestionBankPage() {
     }
   };
 
-  const restoreFromHistory = async (targetTemplateId: string, historyRootTemplateId: string) => {
+  const restoreFromHistory = async (targetTemplateId: string, historyRootTemplateId: string, targetTitle: string) => {
     setError(null);
     setInfoMessage(null);
     setHistoryLoading(true);
     try {
-      const restored = await restoreQuestionTemplateVersion(targetTemplateId);
+      const versionRemark = (historyRemarkByTemplate[historyRootTemplateId] ?? '').trim();
+      const restored = await restoreQuestionTemplateVersion(targetTemplateId, { versionRemark });
       await reloadTemplates();
       const versions = await listQuestionTemplateVersions(historyRootTemplateId);
       setVersionHistoryByTemplate((current) => ({ ...current, [historyRootTemplateId]: versions }));
-      setInfoMessage(`已将当前最新版本回退到所选历史版本内容，并生成新版本：${restored.title}（v${restored.version}）`);
+      setHistoryRemarkByTemplate((current) => ({ ...current, [historyRootTemplateId]: '' }));
+      const remark = restored.versionRemark ? `（备注：${restored.versionRemark}）` : '';
+      setInfoMessage(`已将当前版本回退到「${targetTitle}」并生效${remark}`);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : '恢复历史版本失败');
     } finally {
@@ -312,7 +328,10 @@ export function QuestionBankPage() {
       {infoMessage ? <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{infoMessage}</div> : null}
 
       <PageCard className="p-6">
-        <SectionTitle title={editingTemplateId ? '编辑题库题目' : '新建题库题目'} description="可独立创建常用题目，不依赖问卷编辑流程。" />
+        <SectionTitle
+          title={editingTemplateId ? '编辑题库题目' : '新建题库题目'}
+          description="可独立创建常用题目，不依赖问卷编辑流程；每次保存可填写版本备注。"
+        />
         <div className="mt-6 grid gap-5 md:grid-cols-2">
           <div className="md:col-span-2">
             <FieldLabel>题目标题</FieldLabel>
@@ -325,6 +344,14 @@ export function QuestionBankPage() {
               value={form.description}
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
               placeholder="用于记录题目背景、解释说明或使用建议"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <FieldLabel>版本备注（本次保存说明）</FieldLabel>
+            <TextInput
+              value={form.versionRemark ?? ''}
+              onChange={(event) => setForm((current) => ({ ...current, versionRemark: event.target.value }))}
+              placeholder={editingTemplateId ? '例如：优化题干表达，去掉歧义' : '例如：初始版本'}
             />
           </div>
           <div>
@@ -580,14 +607,13 @@ export function QuestionBankPage() {
               <PageCard key={template._id} className="p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-base font-semibold text-slate-900">
-                      {template.title} <span className="text-slate-500">（v{template.version}）</span>
-                    </h3>
+                    <h3 className="text-base font-semibold text-slate-900">{template.title}</h3>
                     <p className="mt-1 text-sm text-slate-700">
                       题型：{typeLabelMap[template.type]} · {template.isRequired ? '必答题' : '非必答题'} ·{' '}
                       {isOwner ? '我创建的题目' : '共享题目'}
                     </p>
                     {template.description ? <p className="mt-2 text-sm text-slate-700">{template.description}</p> : null}
+                    <p className="mt-2 text-xs text-slate-500">当前版本备注：{template.versionRemark || '未填写'}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -704,7 +730,17 @@ export function QuestionBankPage() {
 
                 {isOwner && historyTemplateId === template._id ? (
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-2 text-sm font-medium text-slate-900">版本历史（选择旧版本作为“回退目标”）</div>
+                    <div className="mb-2 text-sm font-medium text-slate-900">版本历史（仅展示，回退后主列表只保留当前生效版本）</div>
+                    <div className="mb-3">
+                      <FieldLabel>回退后的版本备注</FieldLabel>
+                      <TextInput
+                        value={historyRemarkByTemplate[template._id] ?? ''}
+                        onChange={(event) =>
+                          setHistoryRemarkByTemplate((current) => ({ ...current, [template._id]: event.target.value }))
+                        }
+                        placeholder="例如：回退到稳定版本，修复本周线上异常"
+                      />
+                    </div>
                     {historyLoading ? (
                       <div className="text-sm text-slate-700">正在加载版本历史…</div>
                     ) : (versionHistoryByTemplate[template._id] ?? []).length === 0 ? (
@@ -717,18 +753,15 @@ export function QuestionBankPage() {
                             className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
                           >
                             <div className="text-sm text-slate-700">
-                              <span className="font-medium text-slate-900">v{version.version}</span> · {version.title}
-                              {version.previousTemplateId ? (
-                                <span className="ml-2 text-xs text-slate-500">来源版本ID：{version.previousTemplateId}</span>
-                              ) : (
-                                <span className="ml-2 text-xs text-slate-500">初始版本</span>
-                              )}
+                              <div className="font-medium text-slate-900">{version.title}</div>
+                              <div className="text-xs text-slate-500">版本备注：{version.versionRemark || '未填写'}</div>
+                              <div className="text-xs text-slate-500">更新时间：{formatDateTime(version.updatedAt)}</div>
                             </div>
                             <SecondaryButton
                               disabled={historyLoading || index === 0}
-                              onClick={() => void restoreFromHistory(version._id, template._id)}
+                              onClick={() => void restoreFromHistory(version._id, template._id, version.title)}
                             >
-                              {index === 0 ? '当前最新版本' : '回退到此版本'}
+                              {index === 0 ? '当前生效版本' : '回退到此版本'}
                             </SecondaryButton>
                           </div>
                         ))}

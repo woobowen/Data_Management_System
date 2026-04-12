@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 
 import { asyncHandler } from '../lib/asyncHandler';
-import { questionTemplatePayloadSchema, shareQuestionTemplateSchema } from '../lib/schemas';
+import { questionTemplatePayloadSchema, restoreQuestionTemplateSchema, shareQuestionTemplateSchema } from '../lib/schemas';
 import {
   createQuestionTemplate,
   deleteQuestionTemplate,
@@ -97,7 +97,8 @@ export const listQuestionTemplateVersionsController = asyncHandler(async (req: R
 });
 
 export const restoreQuestionTemplateVersionController = asyncHandler(async (req: Request, res: Response) => {
-  const template = await restoreQuestionTemplateVersion(req.user!.userId, String(req.params.id));
+  const payload = restoreQuestionTemplateSchema.parse(req.body ?? {});
+  const template = await restoreQuestionTemplateVersion(req.user!.userId, String(req.params.id), payload.versionRemark);
   res.status(201).json({
     code: 201,
     message: '已将当前最新版本回退到所选历史版本内容',

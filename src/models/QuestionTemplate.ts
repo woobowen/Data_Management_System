@@ -27,6 +27,7 @@ const questionTemplateSchema = new Schema(
     rootTemplateId: { type: String, required: true, index: true },
     version: { type: Number, required: true, default: 1 },
     previousTemplateId: { type: Schema.Types.ObjectId, ref: 'QuestionTemplate', default: null },
+    versionRemark: { type: String, default: '' },
     title: { type: String, required: true },
     description: { type: String, default: '' },
     type: { type: String, enum: ['single_choice', 'multi_choice', 'text', 'number'], required: true },

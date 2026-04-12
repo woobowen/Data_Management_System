@@ -87,6 +87,7 @@ describe('survey backend integration', () => {
   const questionTemplatePayload = {
     title: '你的年龄',
     description: '常用于基础画像统计',
+    versionRemark: '初始版本：基础人口属性',
     type: 'number',
     isRequired: true,
     options: [],
@@ -245,6 +246,7 @@ describe('survey backend integration', () => {
       .expect(201);
     const templateId = createResponse.body.data._id;
     expect(createResponse.body.data.version).toBe(1);
+    expect(createResponse.body.data.versionRemark).toBe('初始版本：基础人口属性');
 
     const getResponse = await request(app)
       .get(`/api/questions/${templateId}`)
@@ -259,6 +261,7 @@ describe('survey backend integration', () => {
         ...questionTemplatePayload,
         title: '你的真实年龄',
         description: '更新后的描述',
+        versionRemark: '改进题干表达，减少歧义',
       })
       .expect(200);
     const updatedTemplateId = updateResponse.body.data._id;
@@ -267,6 +270,12 @@ describe('survey backend integration', () => {
     expect(updateResponse.body.data.previousTemplateId).toBe(templateId);
     expect(updateResponse.body.data.title).toBe('你的真实年龄');
     expect(updateResponse.body.data.description).toBe('更新后的描述');
+    expect(updateResponse.body.data.versionRemark).toBe('改进题干表达，减少歧义');
+
+    const latestListResponse = await request(app).get('/api/questions').set('Authorization', `Bearer ${authToken}`).expect(200);
+    expect(latestListResponse.body.data).toHaveLength(1);
+    expect(latestListResponse.body.data[0]._id).toBe(updatedTemplateId);
+    expect(latestListResponse.body.data[0].versionRemark).toBe('改进题干表达，减少歧义');
 
     const oldVersionResponse = await request(app)
       .get(`/api/questions/${templateId}`)
@@ -280,10 +289,15 @@ describe('survey backend integration', () => {
       .set('Authorization', `Bearer ${authToken}`)
       .expect(200);
     expect(versionListResponse.body.data.map((item: { version: number }) => item.version)).toEqual([2, 1]);
+    expect(versionListResponse.body.data.map((item: { versionRemark: string }) => item.versionRemark)).toEqual([
+      '改进题干表达，减少歧义',
+      '初始版本：基础人口属性',
+    ]);
 
     const restoreResponse = await request(app)
       .post(`/api/questions/${templateId}/restore`)
       .set('Authorization', `Bearer ${authToken}`)
+      .send({ versionRemark: '回退到初始稳定版本' })
       .expect(201);
     const restoredTemplateId = restoreResponse.body.data._id;
     expect(restoredTemplateId).not.toBe(templateId);
@@ -291,6 +305,12 @@ describe('survey backend integration', () => {
     expect(restoreResponse.body.data.version).toBe(3);
     expect(restoreResponse.body.data.previousTemplateId).toBe(updatedTemplateId);
     expect(restoreResponse.body.data.title).toBe('你的年龄');
+    expect(restoreResponse.body.data.versionRemark).toBe('回退到初始稳定版本');
+
+    const latestListAfterRestore = await request(app).get('/api/questions').set('Authorization', `Bearer ${authToken}`).expect(200);
+    expect(latestListAfterRestore.body.data).toHaveLength(1);
+    expect(latestListAfterRestore.body.data[0]._id).toBe(restoredTemplateId);
+    expect(latestListAfterRestore.body.data[0].versionRemark).toBe('回退到初始稳定版本');
 
     const versionListAfterRestore = await request(app)
       .get(`/api/questions/${templateId}/versions`)
@@ -305,16 +325,6 @@ describe('survey backend integration', () => {
 
     await request(app)
       .delete(`/api/questions/${restoredTemplateId}`)
-      .set('Authorization', `Bearer ${authToken}`)
-      .expect(200);
-
-    await request(app)
-      .delete(`/api/questions/${updatedTemplateId}`)
-      .set('Authorization', `Bearer ${authToken}`)
-      .expect(200);
-
-    await request(app)
-      .delete(`/api/questions/${templateId}`)
       .set('Authorization', `Bearer ${authToken}`)
       .expect(200);
 
@@ -358,6 +368,29 @@ describe('survey backend integration', () => {
       .expect(200);
     expect(studentListResponse.body.data).toHaveLength(1);
     expect(studentListResponse.body.data[0]._id).toBe(templateId);
+
+    const updateResponse = await request(app)
+      .put(`/api/questions/${templateId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({
+        ...questionTemplatePayload,
+        title: '你的年龄（修订版）',
+        versionRemark: '修订题干',
+      })
+      .expect(200);
+    const latestTemplateId = updateResponse.body.data._id;
+
+    await request(app)
+      .put(`/api/questions/${latestTemplateId}/shares`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ usernames: [] })
+      .expect(200);
+
+    const studentListAfterUnshare = await request(app)
+      .get('/api/questions')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .expect(200);
+    expect(studentListAfterUnshare.body.data).toHaveLength(0);
 
     await request(app)
       .put(`/api/questions/${templateId}/shares`)

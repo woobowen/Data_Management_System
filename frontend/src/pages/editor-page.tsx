@@ -35,6 +35,7 @@ function questionToTemplatePayload(question: SurveyQuestionInput): QuestionTempl
     description: question.description ?? '',
     type: question.type,
     isRequired: question.isRequired,
+    versionRemark: '从问卷编辑器保存',
     options: isChoiceQuestion
       ? (question.options ?? []).map((option) => ({
           optionId: option.optionId,
@@ -99,7 +100,8 @@ export function EditorPage({ mode }: EditorPageProps) {
         questionTemplateToSurveyQuestion(pickedTemplate, current.questions.length + 1),
       ],
     }));
-    setInfoMessage(`已从题库插入题目：${pickedTemplate.title}（v${pickedTemplate.version}）`);
+    const remark = pickedTemplate.versionRemark ? `（版本备注：${pickedTemplate.versionRemark}）` : '';
+    setInfoMessage(`已从题库插入题目：${pickedTemplate.title}${remark}`);
   }, [loading]);
 
   const orderedQuestions = useMemo(
@@ -197,7 +199,8 @@ export function EditorPage({ mode }: EditorPageProps) {
                         setError(null);
                         try {
                           const savedTemplate = await createQuestionTemplate(questionToTemplatePayload(question));
-                          setInfoMessage(`已保存到题库：${savedTemplate.title}（v${savedTemplate.version}）`);
+                          const remark = savedTemplate.versionRemark ? `（版本备注：${savedTemplate.versionRemark}）` : '';
+                          setInfoMessage(`已保存到题库：${savedTemplate.title}${remark}`);
                         } catch (err) {
                           setError(err instanceof ApiClientError ? err.message : '保存题库失败');
                         } finally {

@@ -102,11 +102,17 @@ const normalizeTemplatePayload = (payload: QuestionTemplatePayload) => {
   };
 };
 
+const normalizeVersionRemark = (versionRemark: string, fallback: string) => {
+  const normalized = versionRemark.trim();
+  return normalized.length > 0 ? normalized : fallback;
+};
+
 const createNextTemplateVersion = async (params: {
   ownerId: Types.ObjectId;
   rootTemplateId: string;
   sourceTemplateId: Types.ObjectId;
   sharedWithUserIds: Types.ObjectId[];
+  versionRemark: string;
   content: {
     title: string;
     description: string;
@@ -127,6 +133,7 @@ const createNextTemplateVersion = async (params: {
     version: nextVersion,
     previousTemplateId: params.sourceTemplateId,
     sharedWithUserIds: params.sharedWithUserIds,
+    versionRemark: params.versionRemark,
     ...params.content,
   });
 };
@@ -151,15 +158,24 @@ export const createQuestionTemplate = async (ownerId: string, payload: QuestionT
     rootTemplateId: uuidv4(),
     version: 1,
     previousTemplateId: null,
+    versionRemark: normalizeVersionRemark(payload.versionRemark, '初始版本'),
     ...normalized,
   });
 };
 
 export const listQuestionTemplates = async (ownerId: string) => {
   const ownerObjectId = new Types.ObjectId(ownerId);
-  return QuestionTemplateModel.find({
-    $or: [{ ownerId: ownerObjectId }, { sharedWithUserIds: ownerObjectId }],
-  }).sort({ updatedAt: -1 });
+  return QuestionTemplateModel.aggregate([
+    { $sort: { rootTemplateId: 1, version: -1, updatedAt: -1 } },
+    { $group: { _id: '$rootTemplateId', latest: { $first: '$$ROOT' } } },
+    { $replaceRoot: { newRoot: '$latest' } },
+    {
+      $match: {
+        $or: [{ ownerId: ownerObjectId }, { sharedWithUserIds: ownerObjectId }],
+      },
+    },
+    { $sort: { updatedAt: -1 } },
+  ]);
 };
 
 export const getQuestionTemplateById = async (userId: string, templateId: string) => {
@@ -186,15 +202,17 @@ export const updateQuestionTemplate = async (ownerId: string, templateId: string
     rootTemplateId: template.rootTemplateId,
     sourceTemplateId: template._id,
     sharedWithUserIds: template.sharedWithUserIds.map((item) => new Types.ObjectId(item)),
+    versionRemark: normalizeVersionRemark(payload.versionRemark, '更新题目内容'),
     content: normalized,
   });
 };
 
 export const deleteQuestionTemplate = async (ownerId: string, templateId: string) => {
-  const objectId = parseTemplateObjectId(templateId);
-  await getOwnedTemplateById(ownerId, templateId);
-
-  await QuestionTemplateModel.deleteOne({ _id: objectId });
+  const template = await getOwnedTemplateById(ownerId, templateId);
+  await QuestionTemplateModel.deleteMany({
+    ownerId: template.ownerId,
+    rootTemplateId: template.rootTemplateId,
+  });
 };
 
 export const getQuestionTemplateSharedUsernames = async (ownerId: string, templateId: string) => {
@@ -253,7 +271,7 @@ export const listQuestionTemplateVersions = async (ownerId: string, templateId: 
   }).sort({ version: -1, updatedAt: -1 });
 };
 
-export const restoreQuestionTemplateVersion = async (ownerId: string, templateId: string) => {
+export const restoreQuestionTemplateVersion = async (ownerId: string, templateId: string, versionRemark: string) => {
   const template = await getOwnedTemplateById(ownerId, templateId);
   const latestTemplate = await QuestionTemplateModel.findOne({
     ownerId: template.ownerId,
@@ -286,6 +304,7 @@ export const restoreQuestionTemplateVersion = async (ownerId: string, templateId
     sharedWithUserIds: latestTemplate.sharedWithUserIds
       ? latestTemplate.sharedWithUserIds.map((item) => new Types.ObjectId(item))
       : template.sharedWithUserIds.map((item) => new Types.ObjectId(item)),
+    versionRemark: normalizeVersionRemark(versionRemark, `回退到历史版本：${template.title}`),
     content,
   });
 };
