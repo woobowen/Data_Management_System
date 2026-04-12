@@ -170,8 +170,8 @@ export function QuestionBankPage() {
 
       if (editingTemplateId) {
         const updated = await updateQuestionTemplate(editingTemplateId, payload);
-        setTemplates((current) => current.map((item) => (item._id === updated._id ? updated : item)));
-        setInfoMessage(`题库题目已更新：${updated.title}`);
+        await reloadTemplates();
+        setInfoMessage(`题库题目已生成新版本：${updated.title}（v${updated.version}）`);
       } else {
         const created = await createQuestionTemplate(payload);
         setTemplates((current) => [created, ...current]);

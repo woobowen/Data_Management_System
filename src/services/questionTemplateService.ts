@@ -150,15 +150,20 @@ export const updateQuestionTemplate = async (ownerId: string, templateId: string
   validateTemplatePayload(payload);
   const template = await getOwnedTemplateById(ownerId, templateId);
 
+  const latestTemplate = await QuestionTemplateModel.findOne({ rootTemplateId: template.rootTemplateId })
+    .sort({ version: -1 })
+    .lean();
+  const nextVersion = Math.max(latestTemplate?.version ?? 0, template.version) + 1;
+
   const normalized = normalizeTemplatePayload(payload);
-  template.title = normalized.title;
-  template.description = normalized.description;
-  template.type = normalized.type;
-  template.isRequired = normalized.isRequired;
-  template.set('options', normalized.options);
-  template.set('validation', normalized.validation);
-  await template.save();
-  return template;
+  return QuestionTemplateModel.create({
+    ownerId: template.ownerId,
+    rootTemplateId: template.rootTemplateId,
+    version: nextVersion,
+    previousTemplateId: template._id,
+    sharedWithUserIds: template.sharedWithUserIds,
+    ...normalized,
+  });
 };
 
 export const deleteQuestionTemplate = async (ownerId: string, templateId: string) => {

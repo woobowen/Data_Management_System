@@ -244,6 +244,7 @@ describe('survey backend integration', () => {
       .send(questionTemplatePayload)
       .expect(201);
     const templateId = createResponse.body.data._id;
+    expect(createResponse.body.data.version).toBe(1);
 
     const getResponse = await request(app)
       .get(`/api/questions/${templateId}`)
@@ -260,8 +261,24 @@ describe('survey backend integration', () => {
         description: '更新后的描述',
       })
       .expect(200);
+    const updatedTemplateId = updateResponse.body.data._id;
+    expect(updatedTemplateId).not.toBe(templateId);
+    expect(updateResponse.body.data.version).toBe(2);
+    expect(updateResponse.body.data.previousTemplateId).toBe(templateId);
     expect(updateResponse.body.data.title).toBe('你的真实年龄');
     expect(updateResponse.body.data.description).toBe('更新后的描述');
+
+    const oldVersionResponse = await request(app)
+      .get(`/api/questions/${templateId}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+    expect(oldVersionResponse.body.data.version).toBe(1);
+    expect(oldVersionResponse.body.data.title).toBe('你的年龄');
+
+    await request(app)
+      .delete(`/api/questions/${updatedTemplateId}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
 
     await request(app)
       .delete(`/api/questions/${templateId}`)

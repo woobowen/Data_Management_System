@@ -40,6 +40,7 @@ const questionTemplateSchema = new Schema(
 
 questionTemplateSchema.index({ ownerId: 1, updatedAt: -1 });
 questionTemplateSchema.index({ sharedWithUserIds: 1, updatedAt: -1 });
+questionTemplateSchema.index({ rootTemplateId: 1, version: 1 }, { unique: true });
 
 export type QuestionTemplateDocument = InferSchemaType<typeof questionTemplateSchema> & { _id: Schema.Types.ObjectId };
 
