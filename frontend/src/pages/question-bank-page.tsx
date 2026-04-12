@@ -193,12 +193,12 @@ export function QuestionBankPage() {
         const updated = await updateQuestionTemplate(editingTemplateId, payload);
         await reloadTemplates();
         const remark = updated.versionRemark ? `（备注：${updated.versionRemark}）` : '';
-        setInfoMessage(`题库题目已更新当前生效版本：${updated.title}${remark}`);
+        setInfoMessage(`题库题目已更新为第${updated.version}版：${updated.title}${remark}`);
       } else {
         const created = await createQuestionTemplate(payload);
         setTemplates((current) => [created, ...current]);
         setSharedUsernamesByTemplate((current) => ({ ...current, [created._id]: [] }));
-        setInfoMessage(`题库题目已创建：${created.title}`);
+        setInfoMessage(`题库题目已创建（第${created.version}版）：${created.title}`);
       }
       setEditingTemplateId(null);
       setForm(createEmptyTemplateForm());
@@ -276,7 +276,7 @@ export function QuestionBankPage() {
       setVersionHistoryByTemplate((current) => ({ ...current, [historyRootTemplateId]: versions }));
       setHistoryRemarkByTemplate((current) => ({ ...current, [historyRootTemplateId]: '' }));
       const remark = restored.versionRemark ? `（备注：${restored.versionRemark}）` : '';
-      setInfoMessage(`已将当前版本回退到「${targetTitle}」并生效${remark}`);
+      setInfoMessage(`已将当前版本回退到「${targetTitle}」，并生效为第${restored.version}版${remark}`);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : '恢复历史版本失败');
     } finally {
@@ -607,7 +607,9 @@ export function QuestionBankPage() {
               <PageCard key={template._id} className="p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-base font-semibold text-slate-900">{template.title}</h3>
+                    <h3 className="text-base font-semibold text-slate-900">
+                      {template.title} <span className="text-slate-500">（第{template.version}版）</span>
+                    </h3>
                     <p className="mt-1 text-sm text-slate-700">
                       题型：{typeLabelMap[template.type]} · {template.isRequired ? '必答题' : '非必答题'} ·{' '}
                       {isOwner ? '我创建的题目' : '共享题目'}
@@ -753,7 +755,9 @@ export function QuestionBankPage() {
                             className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
                           >
                             <div className="text-sm text-slate-700">
-                              <div className="font-medium text-slate-900">{version.title}</div>
+                              <div className="font-medium text-slate-900">
+                                第{version.version}版 · {version.title}
+                              </div>
                               <div className="text-xs text-slate-500">版本备注：{version.versionRemark || '未填写'}</div>
                               <div className="text-xs text-slate-500">更新时间：{formatDateTime(version.updatedAt)}</div>
                             </div>
