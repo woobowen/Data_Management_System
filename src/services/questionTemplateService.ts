@@ -210,5 +210,8 @@ export const updateQuestionTemplateSharedUsernames = async (ownerId: string, tem
   template.set('sharedWithUserIds', userIds);
   await template.save();
 
-  return users.map((user) => user.username).sort((left, right) => left.localeCompare(right));
+  return users
+    .filter((user) => user._id.toString() !== ownerId)
+    .map((user) => user.username)
+    .sort((left, right) => left.localeCompare(right));
 };

@@ -101,10 +101,32 @@ export function QuestionBankPage() {
   const returnToPath = returnToRaw.startsWith('/') ? returnToRaw : '/editor/new';
 
   const reloadTemplates = async () => {
+    if (!user?.id) {
+      return;
+    }
     setLoading(true);
     try {
       const data = await listQuestionTemplates();
       setTemplates(data);
+      const ownerTemplateIds = data
+        .filter((template) => String(template.ownerId) === user.id)
+        .map((template) => template._id);
+
+      if (ownerTemplateIds.length > 0) {
+        const shareEntries = await Promise.all(
+          ownerTemplateIds.map(async (templateId) => {
+            try {
+              const shareData = await getQuestionTemplateShares(templateId);
+              return [templateId, shareData.usernames] as const;
+            } catch {
+              return [templateId, []] as const;
+            }
+          }),
+        );
+        setSharedUsernamesByTemplate(Object.fromEntries(shareEntries));
+      } else {
+        setSharedUsernamesByTemplate({});
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : '加载题库失败');
@@ -114,8 +136,11 @@ export function QuestionBankPage() {
   };
 
   useEffect(() => {
+    if (!user?.id) {
+      return;
+    }
     void reloadTemplates();
-  }, []);
+  }, [user?.id]);
 
   const orderedTemplates = useMemo(
     () =>
@@ -150,6 +175,7 @@ export function QuestionBankPage() {
       } else {
         const created = await createQuestionTemplate(payload);
         setTemplates((current) => [created, ...current]);
+        setSharedUsernamesByTemplate((current) => ({ ...current, [created._id]: [] }));
         setInfoMessage(`题库题目已创建：${created.title}`);
       }
       setEditingTemplateId(null);
@@ -543,6 +569,11 @@ export function QuestionBankPage() {
                             try {
                               await deleteQuestionTemplate(template._id);
                               setTemplates((current) => current.filter((item) => item._id !== template._id));
+                              setSharedUsernamesByTemplate((current) => {
+                                const next = { ...current };
+                                delete next[template._id];
+                                return next;
+                              });
                               if (editingTemplateId === template._id) {
                                 setEditingTemplateId(null);
                                 setForm(createEmptyTemplateForm());
