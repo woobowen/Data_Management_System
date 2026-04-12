@@ -305,15 +305,25 @@ export function DeskScene() {
                       >
                         {archiveLabel}
                       </motion.p>
-                      <motion.h2
-                        initial={{ opacity: 0, filter: 'blur(4px)', y: 8 }}
-                        animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
-                        transition={{ duration: 0.78, delay: 0.05 }}
-                        className="max-w-2xl font-hand text-[2.95rem] leading-[1.12] ink-text"
-                      >
-                        {currentQuestion.title}
-                      </motion.h2>
-                    </div>
+                       <motion.h2
+                         initial={{ opacity: 0, filter: 'blur(4px)', y: 8 }}
+                         animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
+                         transition={{ duration: 0.78, delay: 0.05 }}
+                         className="max-w-2xl font-hand text-[2.95rem] leading-[1.12] ink-text"
+                       >
+                         {currentQuestion.title}
+                       </motion.h2>
+                       {currentQuestion.description ? (
+                         <motion.p
+                           initial={{ opacity: 0, filter: 'blur(4px)', y: 8 }}
+                           animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
+                           transition={{ duration: 0.68, delay: 0.08 }}
+                           className="max-w-2xl font-body text-sm leading-7 text-ink/58"
+                         >
+                           {currentQuestion.description}
+                         </motion.p>
+                       ) : null}
+                     </div>
 
                     <motion.div
                       initial={{ opacity: 0, filter: 'blur(4px)', y: 6 }}

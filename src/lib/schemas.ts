@@ -11,28 +11,31 @@ const logicRuleSchema = z.object({
   nextQuestionId: z.string().min(1),
 });
 
-const validationSchema = z
-  .object({
-    minSelected: z.number().int().nonnegative().optional(),
-    maxSelected: z.number().int().nonnegative().optional(),
-    minLength: z.number().int().nonnegative().optional(),
-    maxLength: z.number().int().nonnegative().optional(),
-    min: z.number().optional(),
-    max: z.number().optional(),
-    isInteger: z.boolean().optional(),
-  })
-  .optional();
+const questionValidationSchema = z.object({
+  minSelected: z.number().int().nonnegative().optional(),
+  maxSelected: z.number().int().nonnegative().optional(),
+  minLength: z.number().int().nonnegative().optional(),
+  maxLength: z.number().int().nonnegative().optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  isInteger: z.boolean().optional(),
+});
+
+const optionalQuestionValidationSchema = questionValidationSchema.optional();
 
 export const questionSchema = z.object({
   questionId: z.string().min(1),
   type: z.enum(['single_choice', 'multi_choice', 'text', 'number']),
   title: z.string().min(1),
+  description: z.string().default(''),
   isRequired: z.boolean(),
   order: z.number().int().nonnegative(),
   options: z.array(optionSchema).optional(),
-  validation: validationSchema,
+  validation: optionalQuestionValidationSchema,
   logicRules: z.array(logicRuleSchema).optional(),
   defaultNextQuestionId: z.string().min(1).optional(),
+  questionTemplateId: z.string().min(1).optional(),
+  questionTemplateVersion: z.number().int().positive().optional(),
 });
 
 export const surveyPayloadSchema = z.object({
@@ -41,6 +44,15 @@ export const surveyPayloadSchema = z.object({
   allowAnonymous: z.boolean(),
   deadlineAt: z.string().datetime().optional().nullable(),
   questions: z.array(questionSchema).default([]),
+});
+
+export const questionTemplatePayloadSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().default(''),
+  type: z.enum(['single_choice', 'multi_choice', 'text', 'number']),
+  isRequired: z.boolean().default(false),
+  options: z.array(optionSchema).default([]),
+  validation: questionValidationSchema.default({}),
 });
 
 export const registerSchema = z.object({

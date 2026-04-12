@@ -31,9 +31,14 @@ export function DashboardPage() {
         title="我的问卷"
         description="查看、编辑、发布、关闭并分发你的问卷。"
         action={
-          <Link to="/editor/new">
-            <PrimaryButton>新建问卷</PrimaryButton>
-          </Link>
+          <div className="flex gap-2">
+            <Link to="/question-bank">
+              <SecondaryButton>题库管理</SecondaryButton>
+            </Link>
+            <Link to="/editor/new">
+              <PrimaryButton>新建问卷</PrimaryButton>
+            </Link>
+          </div>
         }
       />
       {error ? <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}

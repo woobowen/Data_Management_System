@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { FieldLabel, PageCard, PrimaryButton, SecondaryButton, SectionTitle, Select, TextArea, TextInput } from '../components/ui';
-import { ApiClientError, createSurvey, getMySurvey, updateSurvey, type SurveyPayload, type SurveyQuestionInput } from '../lib/api';
-import { createEmptyQuestion, createEmptySurveyPayload, surveyToPayload } from '../lib/survey-editor';
+import {
+  ApiClientError,
+  createQuestionTemplate,
+  createSurvey,
+  getMySurvey,
+  updateSurvey,
+  type QuestionTemplatePayload,
+  type SurveyPayload,
+  type SurveyQuestionInput,
+} from '../lib/api';
+import { createEmptyQuestion, createEmptySurveyPayload, questionTemplateToSurveyQuestion, surveyToPayload } from '../lib/survey-editor';
+import { consumePickedTemplate } from '../lib/question-bank';
 
 function normalizeQuestion(question: SurveyQuestionInput, order: number): SurveyQuestionInput {
   const options = question.type === 'single_choice' || question.type === 'multi_choice' ? question.options ?? [] : [];
@@ -18,15 +28,35 @@ function normalizeQuestion(question: SurveyQuestionInput, order: number): Survey
   };
 }
 
+function questionToTemplatePayload(question: SurveyQuestionInput): QuestionTemplatePayload {
+  const isChoiceQuestion = question.type === 'single_choice' || question.type === 'multi_choice';
+  return {
+    title: question.title,
+    description: question.description ?? '',
+    type: question.type,
+    isRequired: question.isRequired,
+    options: isChoiceQuestion
+      ? (question.options ?? []).map((option) => ({
+          optionId: option.optionId,
+          text: option.text,
+        }))
+      : [],
+    validation: { ...(question.validation ?? {}) },
+  };
+}
+
 type EditorPageProps = { mode: 'create' | 'edit' };
 
 export function EditorPage({ mode }: EditorPageProps) {
   const { surveyId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [form, setForm] = useState<SurveyPayload>(createEmptySurveyPayload());
   const [loading, setLoading] = useState(mode === 'edit');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savingTemplateQuestionId, setSavingTemplateQuestionId] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (mode !== 'edit' || !surveyId) {
@@ -54,10 +84,30 @@ export function EditorPage({ mode }: EditorPageProps) {
     };
   }, [mode, surveyId]);
 
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+    const pickedTemplate = consumePickedTemplate();
+    if (!pickedTemplate) {
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      questions: [
+        ...current.questions.map((question, index) => normalizeQuestion(question, index + 1)),
+        questionTemplateToSurveyQuestion(pickedTemplate, current.questions.length + 1),
+      ],
+    }));
+    setInfoMessage(`已从题库插入题目：${pickedTemplate.title}（v${pickedTemplate.version}）`);
+  }, [loading]);
+
   const orderedQuestions = useMemo(
     () => form.questions.map((question, index) => normalizeQuestion(question, index + 1)),
     [form.questions],
   );
+  const currentEditorPath = mode === 'edit' && surveyId ? `/editor/${surveyId}` : '/editor/new';
+  const questionBankPickPath = `/question-bank?mode=pick&returnTo=${encodeURIComponent(currentEditorPath)}`;
 
   const setQuestion = (index: number, updater: (question: SurveyQuestionInput) => SurveyQuestionInput) => {
     setForm((current) => ({
@@ -80,6 +130,7 @@ export function EditorPage({ mode }: EditorPageProps) {
         }
       />
       {error ? <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+      {infoMessage ? <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{infoMessage}</div> : null}
       {loading ? (
         <PageCard className="p-8 text-sm text-slate-800">正在加载问卷…</PageCard>
       ) : (
@@ -118,6 +169,18 @@ export function EditorPage({ mode }: EditorPageProps) {
             </div>
           </PageCard>
 
+          <PageCard className="p-6">
+            <SectionTitle title="题库复用" description="跳转到题库页面预览并选择题目，选中后会自动回填到当前问卷。" />
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link to={questionBankPickPath} state={{ from: location.pathname }}>
+                <PrimaryButton>去题库选题（可预览）</PrimaryButton>
+              </Link>
+              <Link to="/question-bank">
+                <SecondaryButton>打开题库管理</SecondaryButton>
+              </Link>
+            </div>
+          </PageCard>
+
           <div className="space-y-4">
             {orderedQuestions.map((question, index) => (
               <PageCard key={question.questionId} className="p-6">
@@ -126,18 +189,37 @@ export function EditorPage({ mode }: EditorPageProps) {
                     <h3 className="text-base font-semibold text-slate-900">题目 {index + 1}</h3>
                     <p className="mt-1 text-sm text-slate-700">配置题型、选项、校验范围与跳转规则。</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm((current) => ({
-                        ...current,
-                        questions: current.questions.filter((_, questionIndex) => questionIndex !== index).map(normalizeQuestion),
-                      }))
-                    }
-                    className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <SecondaryButton
+                      disabled={savingTemplateQuestionId === question.questionId}
+                      onClick={async () => {
+                        setSavingTemplateQuestionId(question.questionId);
+                        setError(null);
+                        try {
+                          const savedTemplate = await createQuestionTemplate(questionToTemplatePayload(question));
+                          setInfoMessage(`已保存到题库：${savedTemplate.title}（v${savedTemplate.version}）`);
+                        } catch (err) {
+                          setError(err instanceof ApiClientError ? err.message : '保存题库失败');
+                        } finally {
+                          setSavingTemplateQuestionId(null);
+                        }
+                      }}
+                    >
+                      {savingTemplateQuestionId === question.questionId ? '保存中...' : '保存到题库'}
+                    </SecondaryButton>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          questions: current.questions.filter((_, questionIndex) => questionIndex !== index).map(normalizeQuestion),
+                        }))
+                      }
+                      className="rounded-lg border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-6 grid gap-5 md:grid-cols-2">
                   <div>
@@ -155,6 +237,8 @@ export function EditorPage({ mode }: EditorPageProps) {
                           options: e.target.value === 'single_choice' || e.target.value === 'multi_choice' ? current.options ?? [{ optionId: `${current.questionId}-a`, text: '' }] : [],
                           validation: {},
                           logicRules: [],
+                          questionTemplateId: undefined,
+                          questionTemplateVersion: undefined,
                         }))
                       }
                     >
@@ -167,6 +251,15 @@ export function EditorPage({ mode }: EditorPageProps) {
                   <div className="md:col-span-2">
                     <FieldLabel>题目标题</FieldLabel>
                     <TextInput value={question.title} onChange={(e) => setQuestion(index, (current) => ({ ...current, title: e.target.value }))} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <FieldLabel>题目备注</FieldLabel>
+                    <TextArea
+                      rows={3}
+                      value={question.description ?? ''}
+                      onChange={(e) => setQuestion(index, (current) => ({ ...current, description: e.target.value }))}
+                      placeholder="可填写题目背景、解释说明或填写提示"
+                    />
                   </div>
                   <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900">
                     <input

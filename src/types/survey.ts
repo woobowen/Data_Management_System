@@ -28,12 +28,15 @@ export interface QuestionValue {
   questionId: string;
   type: QuestionType;
   title: string;
+  description?: string;
   isRequired: boolean;
   order: number;
   options?: OptionValue[];
   validation?: QuestionValidation;
   logicRules?: LogicRuleValue[];
   defaultNextQuestionId?: string;
+  questionTemplateId?: string;
+  questionTemplateVersion?: number;
 }
 
 export interface AnswerValue {

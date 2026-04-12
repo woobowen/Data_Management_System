@@ -17,6 +17,7 @@ export type SurveyQuestionInput = {
   questionId: string;
   type: 'single_choice' | 'multi_choice' | 'text' | 'number';
   title: string;
+  description?: string;
   isRequired: boolean;
   order: number;
   options?: Array<{ optionId: string; text: string }>;
@@ -35,6 +36,8 @@ export type SurveyQuestionInput = {
     nextQuestionId: string;
   }>;
   defaultNextQuestionId?: string;
+  questionTemplateId?: string;
+  questionTemplateVersion?: number;
 };
 
 export type SurveyPayload = {
@@ -53,6 +56,46 @@ export type SurveySummary = {
   allowAnonymous: boolean;
   deadlineAt: string | null;
   questions: SurveyQuestionInput[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type QuestionTemplatePayload = {
+  title: string;
+  description: string;
+  type: 'single_choice' | 'multi_choice' | 'text' | 'number';
+  isRequired: boolean;
+  options?: Array<{ optionId: string; text: string }>;
+  validation?: {
+    minSelected?: number;
+    maxSelected?: number;
+    minLength?: number;
+    maxLength?: number;
+    min?: number;
+    max?: number;
+    isInteger?: boolean;
+  };
+};
+
+export type QuestionTemplateSummary = {
+  _id: string;
+  ownerId: string;
+  rootTemplateId: string;
+  version: number;
+  title: string;
+  description: string;
+  type: 'single_choice' | 'multi_choice' | 'text' | 'number';
+  isRequired: boolean;
+  options: Array<{ optionId: string; text: string }>;
+  validation: {
+    minSelected?: number;
+    maxSelected?: number;
+    minLength?: number;
+    maxLength?: number;
+    min?: number;
+    max?: number;
+    isInteger?: boolean;
+  };
   createdAt?: string;
   updatedAt?: string;
 };
@@ -147,6 +190,53 @@ export async function createSurvey(payload: SurveyPayload): Promise<SurveySummar
   try {
     const response = await api.post<{ code: number; message: string; data: SurveySummary }>('/api/surveys', payload);
     return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function listQuestionTemplates(): Promise<QuestionTemplateSummary[]> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: QuestionTemplateSummary[] }>('/api/questions');
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function createQuestionTemplate(payload: QuestionTemplatePayload): Promise<QuestionTemplateSummary> {
+  try {
+    const response = await api.post<{ code: number; message: string; data: QuestionTemplateSummary }>('/api/questions', payload);
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function getQuestionTemplateById(templateId: string): Promise<QuestionTemplateSummary> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: QuestionTemplateSummary }>(`/api/questions/${templateId}`);
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function updateQuestionTemplate(templateId: string, payload: QuestionTemplatePayload): Promise<QuestionTemplateSummary> {
+  try {
+    const response = await api.put<{ code: number; message: string; data: QuestionTemplateSummary }>(
+      `/api/questions/${templateId}`,
+      payload,
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function deleteQuestionTemplate(templateId: string): Promise<void> {
+  try {
+    await api.delete(`/api/questions/${templateId}`);
   } catch (error) {
     normalizeApiError(error);
   }

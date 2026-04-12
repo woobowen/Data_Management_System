@@ -1,6 +1,7 @@
 import express from 'express';
 
 import { authRouter } from './routes/authRoutes';
+import { questionTemplateRouter } from './routes/questionTemplateRoutes';
 import { surveyRouter } from './routes/surveyRoutes';
 import { statisticsRouter } from './routes/statisticsRoutes';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
@@ -19,6 +20,7 @@ export const createApp = () => {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/questions', questionTemplateRouter);
   app.use('/api/surveys', surveyRouter);
   app.use('/api/statistics', statisticsRouter);
 

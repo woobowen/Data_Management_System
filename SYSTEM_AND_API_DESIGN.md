@@ -10,7 +10,7 @@
 
 ## 数据库设计
 
-本项目数据库采用 MongoDB，主要包含 `Users`、`Surveys`、`Responses` 三个集合。
+本项目数据库采用 MongoDB，主要包含 `Users`、`QuestionTemplates`、`Surveys`、`Responses` 四个集合。
 
 `Users` 集合用于保存账号信息，对应字段包括用户名称、密码哈希与创建时间。其结构较简单，主要服务于登录认证与问卷归属管理。
 
@@ -39,6 +39,7 @@
       questionId: string,
       type: 'single_choice' | 'multi_choice' | 'text' | 'number',
       title: string,
+      description?: string,
       isRequired: boolean,
       order: number,
       options: [{ optionId: string, text: string }],
@@ -58,9 +59,38 @@
           nextQuestionId: string
         }
       ],
-      defaultNextQuestionId: string
+      defaultNextQuestionId: string,
+      questionTemplateId?: string,
+      questionTemplateVersion?: number
     }
   ]
+}
+```
+
+`QuestionTemplates` 集合用于保存可复用题目。每条记录代表一个可选入题库的题目版本，便于后续跨问卷复用、共享和版本管理。
+
+```ts
+{
+  _id: ObjectId,
+  ownerId: ObjectId,
+  rootTemplateId: string,
+  version: number,
+  previousTemplateId: ObjectId | null,
+  title: string,
+  description: string,
+  type: 'single_choice' | 'multi_choice' | 'text' | 'number',
+  isRequired: boolean,
+  options: [{ optionId: string, text: string }],
+  validation: {
+    minSelected?: number,
+    maxSelected?: number,
+    minLength?: number,
+    maxLength?: number,
+    min?: number,
+    max?: number,
+    isInteger?: boolean
+  },
+  sharedWithUserIds: ObjectId[]
 }
 ```
 
@@ -110,6 +140,26 @@
 `POST /api/surveys`
 
 用于创建问卷草稿。请求体中包含问卷标题、说明、匿名配置、截止时间以及完整题目数组。服务端会先对问卷结构进行合法性校验，再保存草稿。
+
+`POST /api/questions`
+
+用于将单个题目保存到题库。请求体包含题目标题、题型、校验规则与选项（若为选择题）。
+
+`GET /api/questions`
+
+用于获取当前用户可见的题库题目列表（本人创建 + 已共享给本人），供编辑问卷时复用。
+
+`GET /api/questions/:id`
+
+用于获取单个题库题目详情，便于在题库页面进行预览与编辑回显。
+
+`PUT /api/questions/:id`
+
+用于更新题库题目内容，仅题目拥有者可修改。
+
+`DELETE /api/questions/:id`
+
+用于删除题库题目，仅题目拥有者可删除。
 
 `GET /api/surveys`
 

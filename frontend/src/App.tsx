@@ -6,6 +6,7 @@ import { AppShell } from './pages/app-shell';
 import { DashboardPage } from './pages/dashboard-page';
 import { EditorPage } from './pages/editor-page';
 import { LoginPage } from './pages/login-page';
+import { QuestionBankPage } from './pages/question-bank-page';
 import { RegisterPage } from './pages/register-page';
 import { StatsPage } from './pages/stats-page';
 import { SurveyFillPage } from './pages/survey-fill-page';
@@ -43,6 +44,7 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/question-bank" element={<QuestionBankPage />} />
               <Route path="/editor/new" element={<EditorPage mode="create" />} />
               <Route path="/editor/:surveyId" element={<EditorPage mode="edit" />} />
               <Route path="/stats/:surveyId" element={<StatsPage />} />

@@ -26,6 +26,7 @@ export type QuestionValue = {
   questionId: string;
   type: QuestionType;
   title: string;
+  description?: string;
   isRequired: boolean;
   order: number;
   options?: OptionValue[];

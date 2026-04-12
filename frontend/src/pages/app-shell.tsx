@@ -17,6 +17,7 @@ export function AppShell() {
             </Link>
             <nav className="flex items-center gap-2">
               <AppNavLink to="/dashboard">我的问卷</AppNavLink>
+              <AppNavLink to="/question-bank">题库管理</AppNavLink>
               <AppNavLink to="/editor/new">新建问卷</AppNavLink>
             </nav>
           </div>

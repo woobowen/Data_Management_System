@@ -3,6 +3,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 
 import { createApp } from '../src/app';
 import { connectDatabase, disconnectDatabase } from '../src/lib/db';
+import { QuestionTemplateModel } from '../src/models/QuestionTemplate';
 import { ResponseModel } from '../src/models/Response';
 import { SurveyModel } from '../src/models/Survey';
 import { UserModel } from '../src/models/User';
@@ -19,7 +20,12 @@ describe('survey backend integration', () => {
   });
 
   afterEach(async () => {
-    await Promise.all([UserModel.deleteMany({}), SurveyModel.deleteMany({}), ResponseModel.deleteMany({})]);
+    await Promise.all([
+      UserModel.deleteMany({}),
+      SurveyModel.deleteMany({}),
+      ResponseModel.deleteMany({}),
+      QuestionTemplateModel.deleteMany({}),
+    ]);
     token = '';
     surveyId = '';
   });
@@ -39,6 +45,7 @@ describe('survey backend integration', () => {
         questionId: 'q1',
         type: 'single_choice',
         title: '你是否在职',
+        description: '用于分流在职与非在职人群',
         isRequired: true,
         order: 1,
         options: [
@@ -56,6 +63,7 @@ describe('survey backend integration', () => {
         questionId: 'q2',
         type: 'number',
         title: '你的工龄',
+        description: '单位：年',
         isRequired: true,
         order: 2,
         validation: { min: 0, max: 50, isInteger: true },
@@ -66,6 +74,7 @@ describe('survey backend integration', () => {
         questionId: 'q3',
         type: 'text',
         title: '请说明原因',
+        description: '简要说明当前状态',
         isRequired: true,
         order: 3,
         validation: { minLength: 2, maxLength: 20 },
@@ -73,6 +82,19 @@ describe('survey backend integration', () => {
         defaultNextQuestionId: 'END',
       },
     ],
+  };
+
+  const questionTemplatePayload = {
+    title: '你的年龄',
+    description: '常用于基础画像统计',
+    type: 'number',
+    isRequired: true,
+    options: [],
+    validation: {
+      min: 0,
+      max: 120,
+      isInteger: true,
+    },
   };
 
   const bootstrapSurvey = async () => {
@@ -106,6 +128,7 @@ describe('survey backend integration', () => {
 
     expect(renderResponse.body.data.status).toBe('published');
     expect(renderResponse.body.data.questions).toHaveLength(3);
+    expect(renderResponse.body.data.questions[0].description).toContain('分流');
     expect(renderResponse.body.data.ownerId).toBeUndefined();
     expect(renderResponse.body.data.surveyId).toBe(surveyId);
   });
@@ -134,6 +157,119 @@ describe('survey backend integration', () => {
     expect(q1Stats.optionCounts).toEqual([{ questionId: 'q1', optionId: 'optA', count: 1 }]);
     expect(q1Stats.responseCount).toBe(1);
     expect(q2Stats.average).toBe(5);
+  });
+
+  it('supports question bank save and reuse metadata in surveys', async () => {
+    await request(app).post('/api/auth/register').send({ username: 'charlie', password: 'password123' }).expect(201);
+
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'charlie', password: 'password123' })
+      .expect(200);
+
+    token = loginResponse.body.data.token;
+
+    const templateResponse = await request(app)
+      .post('/api/questions')
+      .set('Authorization', `Bearer ${token}`)
+      .send(questionTemplatePayload)
+      .expect(201);
+
+    const templateId = templateResponse.body.data._id;
+    const templateVersion = templateResponse.body.data.version;
+
+    const listResponse = await request(app).get('/api/questions').set('Authorization', `Bearer ${token}`).expect(200);
+    expect(listResponse.body.data).toHaveLength(1);
+    expect(listResponse.body.data[0]._id).toBe(templateId);
+    expect(listResponse.body.data[0].description).toBe(questionTemplatePayload.description);
+
+    const surveyA = {
+      title: '题库复用问卷 A',
+      description: '使用题库题目',
+      allowAnonymous: true,
+      deadlineAt: null,
+      questions: [
+        {
+          questionId: 'qAgeA',
+          type: 'number',
+          title: '你的年龄',
+          description: '来自题库模板',
+          isRequired: true,
+          order: 1,
+          options: [],
+          validation: { min: 0, max: 120, isInteger: true },
+          logicRules: [],
+          defaultNextQuestionId: 'END',
+          questionTemplateId: templateId,
+          questionTemplateVersion: templateVersion,
+        },
+      ],
+    };
+
+    const surveyB = {
+      ...surveyA,
+      title: '题库复用问卷 B',
+      questions: surveyA.questions.map((question) => ({ ...question, questionId: 'qAgeB' })),
+    };
+
+    const createSurveyAResponse = await request(app)
+      .post('/api/surveys')
+      .set('Authorization', `Bearer ${token}`)
+      .send(surveyA)
+      .expect(201);
+
+    const createSurveyBResponse = await request(app)
+      .post('/api/surveys')
+      .set('Authorization', `Bearer ${token}`)
+      .send(surveyB)
+      .expect(201);
+
+    expect(createSurveyAResponse.body.data.questions[0].questionTemplateId).toBe(templateId);
+    expect(createSurveyBResponse.body.data.questions[0].questionTemplateId).toBe(templateId);
+    expect(createSurveyAResponse.body.data.questions[0].questionTemplateVersion).toBe(templateVersion);
+    expect(createSurveyBResponse.body.data.questions[0].questionTemplateVersion).toBe(templateVersion);
+  });
+
+  it('supports question bank CRUD operations for owner', async () => {
+    await request(app).post('/api/auth/register').send({ username: 'diana', password: 'password123' }).expect(201);
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'diana', password: 'password123' })
+      .expect(200);
+    const authToken = loginResponse.body.data.token;
+
+    const createResponse = await request(app)
+      .post('/api/questions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(questionTemplatePayload)
+      .expect(201);
+    const templateId = createResponse.body.data._id;
+
+    const getResponse = await request(app)
+      .get(`/api/questions/${templateId}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+    expect(getResponse.body.data.title).toBe('你的年龄');
+
+    const updateResponse = await request(app)
+      .put(`/api/questions/${templateId}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        ...questionTemplatePayload,
+        title: '你的真实年龄',
+        description: '更新后的描述',
+      })
+      .expect(200);
+    expect(updateResponse.body.data.title).toBe('你的真实年龄');
+    expect(updateResponse.body.data.description).toBe('更新后的描述');
+
+    await request(app)
+      .delete(`/api/questions/${templateId}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+
+    const listResponse = await request(app).get('/api/questions').set('Authorization', `Bearer ${authToken}`).expect(200);
+    expect(listResponse.body.data).toHaveLength(0);
   });
 
   it('rejects invalid validation values', async () => {

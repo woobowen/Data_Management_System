@@ -183,6 +183,7 @@ const normalizeQuestion = (question: QuestionValue): z.infer<typeof surveyPayloa
   questionId: question.questionId,
   type: question.type,
   title: question.title,
+  description: question.description || '',
   isRequired: question.isRequired,
   order: question.order,
   options: (question.options || []).map((option) => ({
@@ -204,6 +205,8 @@ const normalizeQuestion = (question: QuestionValue): z.infer<typeof surveyPayloa
     nextQuestionId: rule.nextQuestionId,
   })),
   defaultNextQuestionId: question.defaultNextQuestionId || END,
+  questionTemplateId: question.questionTemplateId,
+  questionTemplateVersion: question.questionTemplateVersion,
 });
 
 const serializeRenderableSurvey = (survey: {
@@ -228,12 +231,15 @@ const serializeRenderableSurvey = (survey: {
       questionId: question.questionId,
       type: question.type,
       title: question.title,
+      description: question.description || '',
       isRequired: question.isRequired,
       order: question.order,
       options: question.options || [],
       validation: question.validation || {},
       logicRules: question.logicRules || [],
       defaultNextQuestionId: question.defaultNextQuestionId || END,
+      questionTemplateId: question.questionTemplateId,
+      questionTemplateVersion: question.questionTemplateVersion,
     })),
 });
 
