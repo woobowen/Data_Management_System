@@ -7,7 +7,9 @@ import {
   ApiClientError,
   createQuestionTemplate,
   deleteQuestionTemplate,
+  getQuestionTemplateShares,
   listQuestionTemplates,
+  updateQuestionTemplateShares,
   updateQuestionTemplate,
   type QuestionTemplatePayload,
   type QuestionTemplateSummary,
@@ -86,7 +88,12 @@ export function QuestionBankPage() {
   const [saving, setSaving] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [sharingTemplateId, setSharingTemplateId] = useState<string | null>(null);
+  const [sharingInput, setSharingInput] = useState('');
+  const [sharingLoading, setSharingLoading] = useState(false);
+  const [sharedUsernamesByTemplate, setSharedUsernamesByTemplate] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionTemplatePayload>(createEmptyTemplateForm());
 
   const isPickMode = searchParams.get('mode') === 'pick';
@@ -139,9 +146,11 @@ export function QuestionBankPage() {
       if (editingTemplateId) {
         const updated = await updateQuestionTemplate(editingTemplateId, payload);
         setTemplates((current) => current.map((item) => (item._id === updated._id ? updated : item)));
+        setInfoMessage(`题库题目已更新：${updated.title}`);
       } else {
         const created = await createQuestionTemplate(payload);
         setTemplates((current) => [created, ...current]);
+        setInfoMessage(`题库题目已创建：${created.title}`);
       }
       setEditingTemplateId(null);
       setForm(createEmptyTemplateForm());
@@ -149,6 +158,44 @@ export function QuestionBankPage() {
       setError(err instanceof ApiClientError ? err.message : '保存题目失败');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const parseShareInput = (value: string) =>
+    [...new Set(value.split(/[,\n，\s]+/).map((item) => item.trim()).filter((item) => item.length > 0))];
+
+  const openShareEditor = async (templateId: string) => {
+    setError(null);
+    setInfoMessage(null);
+    setSharingTemplateId(templateId);
+    setSharingLoading(true);
+    try {
+      const shareData = await getQuestionTemplateShares(templateId);
+      setSharedUsernamesByTemplate((current) => ({ ...current, [templateId]: shareData.usernames }));
+      setSharingInput(shareData.usernames.join(', '));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : '加载共享列表失败');
+      setSharingTemplateId(null);
+    } finally {
+      setSharingLoading(false);
+    }
+  };
+
+  const submitShareSettings = async (templateId: string) => {
+    setError(null);
+    setInfoMessage(null);
+    setSharingLoading(true);
+    try {
+      const usernames = parseShareInput(sharingInput);
+      const result = await updateQuestionTemplateShares(templateId, usernames);
+      setSharedUsernamesByTemplate((current) => ({ ...current, [templateId]: result.usernames }));
+      setInfoMessage(`共享设置已更新，当前共享 ${result.usernames.length} 位用户。`);
+      setSharingTemplateId(null);
+      setSharingInput('');
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : '更新共享设置失败');
+    } finally {
+      setSharingLoading(false);
     }
   };
 
@@ -177,6 +224,7 @@ export function QuestionBankPage() {
       />
 
       {error ? <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+      {infoMessage ? <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{infoMessage}</div> : null}
 
       <PageCard className="p-6">
         <SectionTitle title={editingTemplateId ? '编辑题库题目' : '新建题库题目'} description="可独立创建常用题目，不依赖问卷编辑流程。" />
@@ -441,6 +489,7 @@ export function QuestionBankPage() {
         <div className="space-y-4">
           {orderedTemplates.map((template) => {
             const isOwner = String(template.ownerId) === user?.id;
+            const sharedUsernames = sharedUsernamesByTemplate[template._id] ?? [];
 
             return (
               <PageCard key={template._id} className="p-6">
@@ -478,6 +527,12 @@ export function QuestionBankPage() {
                           编辑
                         </SecondaryButton>
                         <SecondaryButton
+                          disabled={sharingLoading && sharingTemplateId === template._id}
+                          onClick={() => void openShareEditor(template._id)}
+                        >
+                          共享
+                        </SecondaryButton>
+                        <SecondaryButton
                           disabled={deletingTemplateId === template._id}
                           onClick={async () => {
                             if (!window.confirm('确认删除该题库题目吗？')) {
@@ -509,6 +564,41 @@ export function QuestionBankPage() {
                 </div>
 
                 <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">{renderValidationSummary(template)}</div>
+
+                {isOwner ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                    <div className="font-medium text-slate-900">共享对象</div>
+                    <div className="mt-1">
+                      {sharedUsernames.length > 0 ? sharedUsernames.join('、') : '暂无（点击“共享”可设置）'}
+                    </div>
+                  </div>
+                ) : null}
+
+                {isOwner && sharingTemplateId === template._id ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <FieldLabel>共享用户名</FieldLabel>
+                    <TextArea
+                      rows={3}
+                      value={sharingInput}
+                      onChange={(event) => setSharingInput(event.target.value)}
+                      placeholder="输入用户名，多个请用逗号、空格或换行分隔"
+                    />
+                    <p className="mt-2 text-xs text-slate-600">留空后保存表示取消全部共享。</p>
+                    <div className="mt-3 flex gap-2">
+                      <PrimaryButton disabled={sharingLoading} onClick={() => void submitShareSettings(template._id)}>
+                        {sharingLoading ? '保存中…' : '保存共享设置'}
+                      </PrimaryButton>
+                      <SecondaryButton
+                        onClick={() => {
+                          setSharingTemplateId(null);
+                          setSharingInput('');
+                        }}
+                      >
+                        取消
+                      </SecondaryButton>
+                    </div>
+                  </div>
+                ) : null}
 
                 {(template.type === 'single_choice' || template.type === 'multi_choice') && template.options.length > 0 ? (
                   <div className="mt-4 rounded-xl border border-slate-200 p-4">

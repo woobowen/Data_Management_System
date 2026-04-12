@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ApiError } from '../lib/errors';
 import { questionTemplatePayloadSchema } from '../lib/schemas';
 import { QuestionTemplateModel } from '../models/QuestionTemplate';
+import { UserModel } from '../models/User';
 
 type QuestionTemplatePayload = z.infer<typeof questionTemplatePayloadSchema>;
 
@@ -100,6 +101,18 @@ const normalizeTemplatePayload = (payload: QuestionTemplatePayload) => {
   };
 };
 
+const getOwnedTemplateById = async (ownerId: string, templateId: string) => {
+  const objectId = parseTemplateObjectId(templateId);
+  const template = await QuestionTemplateModel.findById(objectId);
+  if (!template) {
+    throw new ApiError(404, '题库题目不存在');
+  }
+  if (template.ownerId.toString() !== ownerId) {
+    throw new ApiError(403, '仅题目拥有者可执行此操作');
+  }
+  return template;
+};
+
 export const createQuestionTemplate = async (ownerId: string, payload: QuestionTemplatePayload) => {
   validateTemplatePayload(payload);
   const normalized = normalizeTemplatePayload(payload);
@@ -135,15 +148,7 @@ export const getQuestionTemplateById = async (userId: string, templateId: string
 
 export const updateQuestionTemplate = async (ownerId: string, templateId: string, payload: QuestionTemplatePayload) => {
   validateTemplatePayload(payload);
-  const objectId = parseTemplateObjectId(templateId);
-
-  const template = await QuestionTemplateModel.findById(objectId);
-  if (!template) {
-    throw new ApiError(404, '题库题目不存在');
-  }
-  if (template.ownerId.toString() !== ownerId) {
-    throw new ApiError(403, '仅题目拥有者可编辑题库题目');
-  }
+  const template = await getOwnedTemplateById(ownerId, templateId);
 
   const normalized = normalizeTemplatePayload(payload);
   template.title = normalized.title;
@@ -158,14 +163,52 @@ export const updateQuestionTemplate = async (ownerId: string, templateId: string
 
 export const deleteQuestionTemplate = async (ownerId: string, templateId: string) => {
   const objectId = parseTemplateObjectId(templateId);
-
-  const template = await QuestionTemplateModel.findById(objectId);
-  if (!template) {
-    throw new ApiError(404, '题库题目不存在');
-  }
-  if (template.ownerId.toString() !== ownerId) {
-    throw new ApiError(403, '仅题目拥有者可删除题库题目');
-  }
+  await getOwnedTemplateById(ownerId, templateId);
 
   await QuestionTemplateModel.deleteOne({ _id: objectId });
+};
+
+export const getQuestionTemplateSharedUsernames = async (ownerId: string, templateId: string) => {
+  const template = await getOwnedTemplateById(ownerId, templateId);
+
+  if (!template.sharedWithUserIds || template.sharedWithUserIds.length === 0) {
+    return [];
+  }
+
+  const users = await UserModel.find({ _id: { $in: template.sharedWithUserIds } })
+    .select({ _id: 0, username: 1 })
+    .sort({ username: 1 })
+    .lean();
+  return users.map((user) => user.username);
+};
+
+export const updateQuestionTemplateSharedUsernames = async (ownerId: string, templateId: string, usernames: string[]) => {
+  const template = await getOwnedTemplateById(ownerId, templateId);
+
+  const normalizedUsernames = [...new Set(usernames.map((item) => item.trim()).filter((item) => item.length > 0))];
+
+  if (normalizedUsernames.length === 0) {
+    template.set('sharedWithUserIds', []);
+    await template.save();
+    return [];
+  }
+
+  const users = await UserModel.find({ username: { $in: normalizedUsernames } })
+    .select({ _id: 1, username: 1 })
+    .lean();
+
+  const existingUsernames = new Set(users.map((user) => user.username));
+  const missing = normalizedUsernames.filter((username) => !existingUsernames.has(username));
+  if (missing.length > 0) {
+    throw new ApiError(404, `以下用户不存在: ${missing.join(', ')}`);
+  }
+
+  const userIds = users
+    .map((user) => user._id)
+    .filter((userId) => userId.toString() !== ownerId)
+    .map((userId) => new Types.ObjectId(userId));
+  template.set('sharedWithUserIds', userIds);
+  await template.save();
+
+  return users.map((user) => user.username).sort((left, right) => left.localeCompare(right));
 };

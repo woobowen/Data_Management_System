@@ -1,13 +1,15 @@
 import { Request, Response } from 'express';
 
 import { asyncHandler } from '../lib/asyncHandler';
-import { questionTemplatePayloadSchema } from '../lib/schemas';
+import { questionTemplatePayloadSchema, shareQuestionTemplateSchema } from '../lib/schemas';
 import {
   createQuestionTemplate,
   deleteQuestionTemplate,
   getQuestionTemplateById,
+  getQuestionTemplateSharedUsernames,
   listQuestionTemplates,
   updateQuestionTemplate,
+  updateQuestionTemplateSharedUsernames,
 } from '../services/questionTemplateService';
 
 export const createQuestionTemplateController = asyncHandler(async (req: Request, res: Response) => {
@@ -54,5 +56,30 @@ export const deleteQuestionTemplateController = asyncHandler(async (req: Request
     code: 200,
     message: '题库题目删除成功',
     data: null,
+  });
+});
+
+export const getQuestionTemplateSharesController = asyncHandler(async (req: Request, res: Response) => {
+  const usernames = await getQuestionTemplateSharedUsernames(req.user!.userId, String(req.params.id));
+  res.json({
+    code: 200,
+    message: '获取题目共享列表成功',
+    data: {
+      templateId: String(req.params.id),
+      usernames,
+    },
+  });
+});
+
+export const updateQuestionTemplateSharesController = asyncHandler(async (req: Request, res: Response) => {
+  const payload = shareQuestionTemplateSchema.parse(req.body);
+  const usernames = await updateQuestionTemplateSharedUsernames(req.user!.userId, String(req.params.id), payload.usernames);
+  res.json({
+    code: 200,
+    message: '题目共享设置已更新',
+    data: {
+      templateId: String(req.params.id),
+      usernames,
+    },
   });
 });

@@ -55,6 +55,10 @@ export const questionTemplatePayloadSchema = z.object({
   validation: questionValidationSchema.default({}),
 });
 
+export const shareQuestionTemplateSchema = z.object({
+  usernames: z.array(z.string().min(3)).default([]),
+});
+
 export const registerSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(6),

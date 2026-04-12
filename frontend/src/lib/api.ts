@@ -100,6 +100,11 @@ export type QuestionTemplateSummary = {
   updatedAt?: string;
 };
 
+export type QuestionTemplateShareResult = {
+  templateId: string;
+  usernames: string[];
+};
+
 export type StatisticsQuestion = {
   questionId: string;
   type: string;
@@ -237,6 +242,29 @@ export async function updateQuestionTemplate(templateId: string, payload: Questi
 export async function deleteQuestionTemplate(templateId: string): Promise<void> {
   try {
     await api.delete(`/api/questions/${templateId}`);
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function getQuestionTemplateShares(templateId: string): Promise<QuestionTemplateShareResult> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: QuestionTemplateShareResult }>(
+      `/api/questions/${templateId}/shares`,
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function updateQuestionTemplateShares(templateId: string, usernames: string[]): Promise<QuestionTemplateShareResult> {
+  try {
+    const response = await api.put<{ code: number; message: string; data: QuestionTemplateShareResult }>(
+      `/api/questions/${templateId}/shares`,
+      { usernames },
+    );
+    return response.data.data;
   } catch (error) {
     normalizeApiError(error);
   }

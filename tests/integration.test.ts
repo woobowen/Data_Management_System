@@ -272,6 +272,50 @@ describe('survey backend integration', () => {
     expect(listResponse.body.data).toHaveLength(0);
   });
 
+  it('supports sharing question template to another user', async () => {
+    await request(app).post('/api/auth/register').send({ username: 'owner', password: 'password123' }).expect(201);
+    await request(app).post('/api/auth/register').send({ username: 'student', password: 'password123' }).expect(201);
+
+    const ownerLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'owner', password: 'password123' })
+      .expect(200);
+    const studentLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'student', password: 'password123' })
+      .expect(200);
+
+    const ownerToken = ownerLogin.body.data.token;
+    const studentToken = studentLogin.body.data.token;
+
+    const createResponse = await request(app)
+      .post('/api/questions')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send(questionTemplatePayload)
+      .expect(201);
+    const templateId = createResponse.body.data._id;
+
+    const shareResponse = await request(app)
+      .put(`/api/questions/${templateId}/shares`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ usernames: ['student'] })
+      .expect(200);
+    expect(shareResponse.body.data.usernames).toEqual(['student']);
+
+    const studentListResponse = await request(app)
+      .get('/api/questions')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .expect(200);
+    expect(studentListResponse.body.data).toHaveLength(1);
+    expect(studentListResponse.body.data[0]._id).toBe(templateId);
+
+    await request(app)
+      .put(`/api/questions/${templateId}/shares`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ usernames: [] })
+      .expect(403);
+  });
+
   it('rejects invalid validation values', async () => {
     await bootstrapSurvey();
 
