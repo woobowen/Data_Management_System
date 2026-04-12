@@ -262,6 +262,10 @@ export const restoreQuestionTemplateVersion = async (ownerId: string, templateId
     .sort({ version: -1 })
     .lean();
 
+  if (latestTemplate && latestTemplate._id.toString() === template._id.toString()) {
+    throw new ApiError(400, '当前已是最新版本，无需恢复');
+  }
+
   const content = {
     title: template.title,
     description: template.description,
@@ -288,31 +292,50 @@ export const listQuestionTemplateUsages = async (ownerId: string, templateId: st
     ownerId: template.ownerId,
     rootTemplateId: template.rootTemplateId,
   })
-    .select({ _id: 1, version: 1 })
+    .select({ _id: 1, version: 1, title: 1, type: 1 })
     .lean();
 
   const templateIdSet = new Set(templatesInRoot.map((item) => item._id.toString()));
   const versionMap = new Map(templatesInRoot.map((item) => [item._id.toString(), item.version]));
+  const signatureSet = new Set(templatesInRoot.map((item) => `${item.title}::${item.type}`));
+  const ownerIdString = template.ownerId.toString();
 
   const surveys = await SurveyModel.find({
-    questions: { $elemMatch: { questionTemplateId: { $in: [...templateIdSet] } } },
+    $or: [
+      { questions: { $elemMatch: { questionTemplateId: { $in: [...templateIdSet] } } } },
+      { ownerId: template.ownerId, questions: { $elemMatch: { questionTemplateId: null, title: { $in: templatesInRoot.map((item) => item.title) } } } },
+    ],
   })
-    .select({ title: 1, status: 1, questions: 1 })
+    .select({ title: 1, status: 1, ownerId: 1, questions: 1 })
     .lean();
 
-  const usages = surveys.flatMap((survey) =>
-    survey.questions
-      .filter((question) => question.questionTemplateId && templateIdSet.has(question.questionTemplateId))
-      .map((question) => ({
-        surveyId: survey._id.toString(),
-        surveyTitle: survey.title,
-        surveyStatus: survey.status,
-        questionId: question.questionId,
-        questionTitle: question.title,
-        questionTemplateId: question.questionTemplateId!,
-        questionTemplateVersion: versionMap.get(question.questionTemplateId!) ?? question.questionTemplateVersion ?? null,
-      })),
-  );
+  const usages = surveys.flatMap((survey) => {
+    const isSurveyOwnerSameAsTemplateOwner = survey.ownerId.toString() === ownerIdString;
+    return survey.questions.flatMap((question) => {
+      const hasTemplateRef = !!question.questionTemplateId && templateIdSet.has(question.questionTemplateId);
+      const matchesLegacySignature =
+        !question.questionTemplateId && isSurveyOwnerSameAsTemplateOwner && signatureSet.has(`${question.title}::${question.type}`);
+
+      if (!hasTemplateRef && !matchesLegacySignature) {
+        return [];
+      }
+
+      return [
+        {
+          surveyId: survey._id.toString(),
+          surveyTitle: survey.title,
+          surveyStatus: survey.status,
+          questionId: question.questionId,
+          questionTitle: question.title,
+          questionTemplateId: hasTemplateRef ? question.questionTemplateId! : null,
+          questionTemplateVersion: hasTemplateRef
+            ? versionMap.get(question.questionTemplateId!) ?? question.questionTemplateVersion ?? null
+            : null,
+          matchMode: hasTemplateRef ? 'template_id' : 'legacy_title_type',
+        },
+      ];
+    });
+  });
 
   return {
     templateId: template._id.toString(),

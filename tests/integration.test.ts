@@ -299,6 +299,11 @@ describe('survey backend integration', () => {
     expect(versionListAfterRestore.body.data.map((item: { version: number }) => item.version)).toEqual([3, 2, 1]);
 
     await request(app)
+      .post(`/api/questions/${restoredTemplateId}/restore`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(400);
+
+    await request(app)
       .delete(`/api/questions/${restoredTemplateId}`)
       .set('Authorization', `Bearer ${authToken}`)
       .expect(200);
@@ -412,6 +417,64 @@ describe('survey backend integration', () => {
     expect(usageResponse.body.data.usageCount).toBe(1);
     expect(usageResponse.body.data.usages[0].surveyId).toBe(surveyCreateResponse.body.data._id);
     expect(usageResponse.body.data.usages[0].questionTemplateId).toBe(templateId);
+    expect(usageResponse.body.data.usages[0].matchMode).toBe('template_id');
+  });
+
+  it('can infer legacy usages when template reference field is missing', async () => {
+    await request(app).post('/api/auth/register').send({ username: 'legacy-owner', password: 'password123' }).expect(201);
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'legacy-owner', password: 'password123' })
+      .expect(200);
+    const authToken = loginResponse.body.data.token;
+
+    const templateResponse = await request(app)
+      .post('/api/questions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: '历史兼容题目',
+        description: '用于兼容历史问卷',
+        type: 'text',
+        isRequired: true,
+        options: [],
+        validation: { minLength: 1, maxLength: 50 },
+      })
+      .expect(201);
+    const templateId = templateResponse.body.data._id;
+
+    await request(app)
+      .post('/api/surveys')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: '历史问卷',
+        description: '题目未携带模板ID',
+        allowAnonymous: true,
+        deadlineAt: null,
+        questions: [
+          {
+            questionId: 'legacy-q1',
+            type: 'text',
+            title: '历史兼容题目',
+            description: '老数据',
+            isRequired: true,
+            order: 1,
+            options: [],
+            validation: { minLength: 1, maxLength: 50 },
+            logicRules: [],
+            defaultNextQuestionId: 'END',
+          },
+        ],
+      })
+      .expect(201);
+
+    const usageResponse = await request(app)
+      .get(`/api/questions/${templateId}/usages`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+
+    expect(usageResponse.body.data.usageCount).toBe(1);
+    expect(usageResponse.body.data.usages[0].matchMode).toBe('legacy_title_type');
+    expect(usageResponse.body.data.usages[0].questionTemplateId).toBeNull();
   });
 
   it('rejects invalid validation values', async () => {

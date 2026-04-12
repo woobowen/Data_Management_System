@@ -112,8 +112,9 @@ export type QuestionTemplateUsageItem = {
   surveyStatus: 'draft' | 'published' | 'closed';
   questionId: string;
   questionTitle: string;
-  questionTemplateId: string;
+  questionTemplateId: string | null;
   questionTemplateVersion: number | null;
+  matchMode: 'template_id' | 'legacy_title_type';
 };
 
 export type QuestionTemplateUsageResult = {

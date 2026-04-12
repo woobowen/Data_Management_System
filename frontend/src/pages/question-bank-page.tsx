@@ -711,7 +711,7 @@ export function QuestionBankPage() {
                       <div className="text-sm text-slate-700">暂无历史版本记录。</div>
                     ) : (
                       <div className="space-y-2">
-                        {(versionHistoryByTemplate[template._id] ?? []).map((version) => (
+                        {(versionHistoryByTemplate[template._id] ?? []).map((version, index) => (
                           <div
                             key={version._id}
                             className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
@@ -725,10 +725,10 @@ export function QuestionBankPage() {
                               )}
                             </div>
                             <SecondaryButton
-                              disabled={historyLoading}
+                              disabled={historyLoading || index === 0}
                               onClick={() => void restoreFromHistory(version._id, template._id)}
                             >
-                              恢复为新版本
+                              {index === 0 ? '当前最新版本' : '恢复为新版本'}
                             </SecondaryButton>
                           </div>
                         ))}
@@ -764,6 +764,10 @@ export function QuestionBankPage() {
                             <div className="mt-1">
                               题目：{usage.questionTitle}（questionId: {usage.questionId}） · 版本：
                               {usage.questionTemplateVersion ?? '未知'}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              匹配方式：
+                              {usage.matchMode === 'template_id' ? '显式模板引用' : '历史数据按标题+题型推断'}
                             </div>
                           </div>
                         ))}
