@@ -266,6 +266,10 @@ export const restoreQuestionTemplateVersion = async (ownerId: string, templateId
     throw new ApiError(400, '当前已是最新版本，无需恢复');
   }
 
+  if (!latestTemplate) {
+    throw new ApiError(404, '题目版本链不存在');
+  }
+
   const content = {
     title: template.title,
     description: template.description,
@@ -278,8 +282,8 @@ export const restoreQuestionTemplateVersion = async (ownerId: string, templateId
   return createNextTemplateVersion({
     ownerId: template.ownerId,
     rootTemplateId: template.rootTemplateId,
-    sourceTemplateId: template._id,
-    sharedWithUserIds: latestTemplate?.sharedWithUserIds
+    sourceTemplateId: new Types.ObjectId(latestTemplate._id),
+    sharedWithUserIds: latestTemplate.sharedWithUserIds
       ? latestTemplate.sharedWithUserIds.map((item) => new Types.ObjectId(item))
       : template.sharedWithUserIds.map((item) => new Types.ObjectId(item)),
     content,

@@ -289,7 +289,7 @@ describe('survey backend integration', () => {
     expect(restoredTemplateId).not.toBe(templateId);
     expect(restoredTemplateId).not.toBe(updatedTemplateId);
     expect(restoreResponse.body.data.version).toBe(3);
-    expect(restoreResponse.body.data.previousTemplateId).toBe(templateId);
+    expect(restoreResponse.body.data.previousTemplateId).toBe(updatedTemplateId);
     expect(restoreResponse.body.data.title).toBe('你的年龄');
 
     const versionListAfterRestore = await request(app)

@@ -100,7 +100,7 @@ export const restoreQuestionTemplateVersionController = asyncHandler(async (req:
   const template = await restoreQuestionTemplateVersion(req.user!.userId, String(req.params.id));
   res.status(201).json({
     code: 201,
-    message: '题目已恢复为新版本',
+    message: '已将当前最新版本回退到所选历史版本内容',
     data: template,
   });
 });

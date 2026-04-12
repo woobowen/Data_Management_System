@@ -260,7 +260,7 @@ export function QuestionBankPage() {
       await reloadTemplates();
       const versions = await listQuestionTemplateVersions(historyRootTemplateId);
       setVersionHistoryByTemplate((current) => ({ ...current, [historyRootTemplateId]: versions }));
-      setInfoMessage(`已从历史版本恢复并生成新版本：${restored.title}（v${restored.version}）`);
+      setInfoMessage(`已将当前最新版本回退到所选历史版本内容，并生成新版本：${restored.title}（v${restored.version}）`);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : '恢复历史版本失败');
     } finally {
@@ -704,7 +704,7 @@ export function QuestionBankPage() {
 
                 {isOwner && historyTemplateId === template._id ? (
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-2 text-sm font-medium text-slate-900">版本历史</div>
+                    <div className="mb-2 text-sm font-medium text-slate-900">版本历史（选择旧版本作为“回退目标”）</div>
                     {historyLoading ? (
                       <div className="text-sm text-slate-700">正在加载版本历史…</div>
                     ) : (versionHistoryByTemplate[template._id] ?? []).length === 0 ? (
@@ -728,7 +728,7 @@ export function QuestionBankPage() {
                               disabled={historyLoading || index === 0}
                               onClick={() => void restoreFromHistory(version._id, template._id)}
                             >
-                              {index === 0 ? '当前最新版本' : '恢复为新版本'}
+                              {index === 0 ? '当前最新版本' : '回退到此版本'}
                             </SecondaryButton>
                           </div>
                         ))}
