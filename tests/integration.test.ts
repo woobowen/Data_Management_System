@@ -361,6 +361,59 @@ describe('survey backend integration', () => {
       .expect(403);
   });
 
+  it('can list surveys using a question template', async () => {
+    await request(app).post('/api/auth/register').send({ username: 'usage-owner', password: 'password123' }).expect(201);
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'usage-owner', password: 'password123' })
+      .expect(200);
+    const authToken = loginResponse.body.data.token;
+
+    const templateResponse = await request(app)
+      .post('/api/questions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(questionTemplatePayload)
+      .expect(201);
+    const templateId = templateResponse.body.data._id;
+    const templateVersion = templateResponse.body.data.version;
+
+    const surveyCreateResponse = await request(app)
+      .post('/api/surveys')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: '题目使用关系测试问卷',
+        description: '用于验证题目引用查询',
+        allowAnonymous: true,
+        deadlineAt: null,
+        questions: [
+          {
+            questionId: 'usage-q1',
+            type: 'number',
+            title: '你的年龄',
+            description: '来自题库',
+            isRequired: true,
+            order: 1,
+            options: [],
+            validation: { min: 0, max: 120, isInteger: true },
+            logicRules: [],
+            defaultNextQuestionId: 'END',
+            questionTemplateId: templateId,
+            questionTemplateVersion: templateVersion,
+          },
+        ],
+      })
+      .expect(201);
+
+    const usageResponse = await request(app)
+      .get(`/api/questions/${templateId}/usages`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+
+    expect(usageResponse.body.data.usageCount).toBe(1);
+    expect(usageResponse.body.data.usages[0].surveyId).toBe(surveyCreateResponse.body.data._id);
+    expect(usageResponse.body.data.usages[0].questionTemplateId).toBe(templateId);
+  });
+
   it('rejects invalid validation values', async () => {
     await bootstrapSurvey();
 

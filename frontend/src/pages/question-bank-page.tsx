@@ -7,6 +7,7 @@ import {
   ApiClientError,
   createQuestionTemplate,
   deleteQuestionTemplate,
+  getQuestionTemplateUsages,
   getQuestionTemplateShares,
   listQuestionTemplateVersions,
   listQuestionTemplates,
@@ -15,6 +16,7 @@ import {
   updateQuestionTemplate,
   type QuestionTemplatePayload,
   type QuestionTemplateSummary,
+  type QuestionTemplateUsageResult,
 } from '../lib/api';
 import { stashPickedTemplate } from '../lib/question-bank';
 import { FieldLabel, PageCard, PrimaryButton, SecondaryButton, SectionTitle, Select, TextArea, TextInput } from '../components/ui';
@@ -92,11 +94,14 @@ export function QuestionBankPage() {
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [sharingTemplateId, setSharingTemplateId] = useState<string | null>(null);
   const [historyTemplateId, setHistoryTemplateId] = useState<string | null>(null);
+  const [usageTemplateId, setUsageTemplateId] = useState<string | null>(null);
   const [sharingInput, setSharingInput] = useState('');
   const [sharingLoading, setSharingLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [usageLoading, setUsageLoading] = useState(false);
   const [sharedUsernamesByTemplate, setSharedUsernamesByTemplate] = useState<Record<string, string[]>>({});
   const [versionHistoryByTemplate, setVersionHistoryByTemplate] = useState<Record<string, QuestionTemplateSummary[]>>({});
+  const [usageByTemplate, setUsageByTemplate] = useState<Record<string, QuestionTemplateUsageResult>>({});
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionTemplatePayload>(createEmptyTemplateForm());
@@ -260,6 +265,22 @@ export function QuestionBankPage() {
       setError(err instanceof ApiClientError ? err.message : '恢复历史版本失败');
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const openUsagePanel = async (templateId: string) => {
+    setError(null);
+    setInfoMessage(null);
+    setUsageTemplateId(templateId);
+    setUsageLoading(true);
+    try {
+      const usage = await getQuestionTemplateUsages(templateId);
+      setUsageByTemplate((current) => ({ ...current, [templateId]: usage }));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : '加载使用情况失败');
+      setUsageTemplateId(null);
+    } finally {
+      setUsageLoading(false);
     }
   };
 
@@ -603,6 +624,12 @@ export function QuestionBankPage() {
                           版本历史
                         </SecondaryButton>
                         <SecondaryButton
+                          disabled={usageLoading && usageTemplateId === template._id}
+                          onClick={() => void openUsagePanel(template._id)}
+                        >
+                          查看使用情况
+                        </SecondaryButton>
+                        <SecondaryButton
                           disabled={deletingTemplateId === template._id}
                           onClick={async () => {
                             if (!window.confirm('确认删除该题库题目吗？')) {
@@ -709,6 +736,44 @@ export function QuestionBankPage() {
                     )}
                     <div className="mt-3">
                       <SecondaryButton onClick={() => setHistoryTemplateId(null)}>关闭历史面板</SecondaryButton>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isOwner && usageTemplateId === template._id ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-2 text-sm font-medium text-slate-900">使用情况</div>
+                    {usageLoading ? (
+                      <div className="text-sm text-slate-700">正在加载使用关系…</div>
+                    ) : !(usageByTemplate[template._id]?.usages.length) ? (
+                      <div className="text-sm text-slate-700">当前没有问卷引用该题目版本链。</div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="text-sm text-slate-700">
+                          已被 <span className="font-medium text-slate-900">{usageByTemplate[template._id].usageCount}</span>{' '}
+                          处问卷题目引用。
+                        </div>
+                        {usageByTemplate[template._id].usages.map((usage) => (
+                          <div
+                            key={`${usage.surveyId}-${usage.questionId}-${usage.questionTemplateId}`}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                          >
+                            <div className="font-medium text-slate-900">
+                              {usage.surveyTitle}（{usage.surveyStatus}）
+                            </div>
+                            <div className="mt-1">
+                              题目：{usage.questionTitle}（questionId: {usage.questionId}） · 版本：
+                              {usage.questionTemplateVersion ?? '未知'}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          若已有发布问卷引用，建议继续通过“编辑→生成新版本”方式改题，避免影响既有问卷内容。
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-3">
+                      <SecondaryButton onClick={() => setUsageTemplateId(null)}>关闭使用面板</SecondaryButton>
                     </div>
                   </div>
                 ) : null}

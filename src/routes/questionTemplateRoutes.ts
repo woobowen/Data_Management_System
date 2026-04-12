@@ -5,6 +5,7 @@ import {
   deleteQuestionTemplateController,
   getQuestionTemplateByIdController,
   getQuestionTemplateSharesController,
+  listQuestionTemplateUsagesController,
   listQuestionTemplateVersionsController,
   listQuestionTemplatesController,
   restoreQuestionTemplateVersionController,
@@ -19,6 +20,7 @@ questionTemplateRouter.post('/', requireAuth, createQuestionTemplateController);
 questionTemplateRouter.get('/', requireAuth, listQuestionTemplatesController);
 questionTemplateRouter.get('/:id/shares', requireAuth, getQuestionTemplateSharesController);
 questionTemplateRouter.put('/:id/shares', requireAuth, updateQuestionTemplateSharesController);
+questionTemplateRouter.get('/:id/usages', requireAuth, listQuestionTemplateUsagesController);
 questionTemplateRouter.get('/:id/versions', requireAuth, listQuestionTemplateVersionsController);
 questionTemplateRouter.post('/:id/restore', requireAuth, restoreQuestionTemplateVersionController);
 questionTemplateRouter.get('/:id', requireAuth, getQuestionTemplateByIdController);

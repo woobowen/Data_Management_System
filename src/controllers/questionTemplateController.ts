@@ -7,6 +7,7 @@ import {
   deleteQuestionTemplate,
   getQuestionTemplateById,
   getQuestionTemplateSharedUsernames,
+  listQuestionTemplateUsages,
   listQuestionTemplateVersions,
   listQuestionTemplates,
   restoreQuestionTemplateVersion,
@@ -101,5 +102,14 @@ export const restoreQuestionTemplateVersionController = asyncHandler(async (req:
     code: 201,
     message: '题目已恢复为新版本',
     data: template,
+  });
+});
+
+export const listQuestionTemplateUsagesController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await listQuestionTemplateUsages(req.user!.userId, String(req.params.id));
+  res.json({
+    code: 200,
+    message: '获取题目使用情况成功',
+    data,
   });
 });

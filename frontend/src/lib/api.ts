@@ -106,6 +106,23 @@ export type QuestionTemplateShareResult = {
   usernames: string[];
 };
 
+export type QuestionTemplateUsageItem = {
+  surveyId: string;
+  surveyTitle: string;
+  surveyStatus: 'draft' | 'published' | 'closed';
+  questionId: string;
+  questionTitle: string;
+  questionTemplateId: string;
+  questionTemplateVersion: number | null;
+};
+
+export type QuestionTemplateUsageResult = {
+  templateId: string;
+  rootTemplateId: string;
+  usageCount: number;
+  usages: QuestionTemplateUsageItem[];
+};
+
 export type StatisticsQuestion = {
   questionId: string;
   type: string;
@@ -286,6 +303,17 @@ export async function restoreQuestionTemplateVersion(templateId: string): Promis
   try {
     const response = await api.post<{ code: number; message: string; data: QuestionTemplateSummary }>(
       `/api/questions/${templateId}/restore`,
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function getQuestionTemplateUsages(templateId: string): Promise<QuestionTemplateUsageResult> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: QuestionTemplateUsageResult }>(
+      `/api/questions/${templateId}/usages`,
     );
     return response.data.data;
   } catch (error) {

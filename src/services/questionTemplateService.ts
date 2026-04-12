@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ApiError } from '../lib/errors';
 import { questionTemplatePayloadSchema } from '../lib/schemas';
 import { QuestionTemplateModel } from '../models/QuestionTemplate';
+import { SurveyModel } from '../models/Survey';
 import { UserModel } from '../models/User';
 
 type QuestionTemplatePayload = z.infer<typeof questionTemplatePayloadSchema>;
@@ -279,4 +280,44 @@ export const restoreQuestionTemplateVersion = async (ownerId: string, templateId
       : template.sharedWithUserIds.map((item) => new Types.ObjectId(item)),
     content,
   });
+};
+
+export const listQuestionTemplateUsages = async (ownerId: string, templateId: string) => {
+  const template = await getOwnedTemplateById(ownerId, templateId);
+  const templatesInRoot = await QuestionTemplateModel.find({
+    ownerId: template.ownerId,
+    rootTemplateId: template.rootTemplateId,
+  })
+    .select({ _id: 1, version: 1 })
+    .lean();
+
+  const templateIdSet = new Set(templatesInRoot.map((item) => item._id.toString()));
+  const versionMap = new Map(templatesInRoot.map((item) => [item._id.toString(), item.version]));
+
+  const surveys = await SurveyModel.find({
+    questions: { $elemMatch: { questionTemplateId: { $in: [...templateIdSet] } } },
+  })
+    .select({ title: 1, status: 1, questions: 1 })
+    .lean();
+
+  const usages = surveys.flatMap((survey) =>
+    survey.questions
+      .filter((question) => question.questionTemplateId && templateIdSet.has(question.questionTemplateId))
+      .map((question) => ({
+        surveyId: survey._id.toString(),
+        surveyTitle: survey.title,
+        surveyStatus: survey.status,
+        questionId: question.questionId,
+        questionTitle: question.title,
+        questionTemplateId: question.questionTemplateId!,
+        questionTemplateVersion: versionMap.get(question.questionTemplateId!) ?? question.questionTemplateVersion ?? null,
+      })),
+  );
+
+  return {
+    templateId: template._id.toString(),
+    rootTemplateId: template.rootTemplateId,
+    usageCount: usages.length,
+    usages,
+  };
 };
