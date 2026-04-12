@@ -101,6 +101,35 @@ const normalizeTemplatePayload = (payload: QuestionTemplatePayload) => {
   };
 };
 
+const createNextTemplateVersion = async (params: {
+  ownerId: Types.ObjectId;
+  rootTemplateId: string;
+  sourceTemplateId: Types.ObjectId;
+  sharedWithUserIds: Types.ObjectId[];
+  content: {
+    title: string;
+    description: string;
+    type: 'single_choice' | 'multi_choice' | 'text' | 'number';
+    isRequired: boolean;
+    options: { optionId: string; text: string }[];
+    validation: Record<string, unknown>;
+  };
+}) => {
+  const latestTemplate = await QuestionTemplateModel.findOne({ rootTemplateId: params.rootTemplateId })
+    .sort({ version: -1 })
+    .lean();
+  const nextVersion = Math.max(latestTemplate?.version ?? 0, 0) + 1;
+
+  return QuestionTemplateModel.create({
+    ownerId: params.ownerId,
+    rootTemplateId: params.rootTemplateId,
+    version: nextVersion,
+    previousTemplateId: params.sourceTemplateId,
+    sharedWithUserIds: params.sharedWithUserIds,
+    ...params.content,
+  });
+};
+
 const getOwnedTemplateById = async (ownerId: string, templateId: string) => {
   const objectId = parseTemplateObjectId(templateId);
   const template = await QuestionTemplateModel.findById(objectId);
@@ -150,19 +179,13 @@ export const updateQuestionTemplate = async (ownerId: string, templateId: string
   validateTemplatePayload(payload);
   const template = await getOwnedTemplateById(ownerId, templateId);
 
-  const latestTemplate = await QuestionTemplateModel.findOne({ rootTemplateId: template.rootTemplateId })
-    .sort({ version: -1 })
-    .lean();
-  const nextVersion = Math.max(latestTemplate?.version ?? 0, template.version) + 1;
-
   const normalized = normalizeTemplatePayload(payload);
-  return QuestionTemplateModel.create({
+  return createNextTemplateVersion({
     ownerId: template.ownerId,
     rootTemplateId: template.rootTemplateId,
-    version: nextVersion,
-    previousTemplateId: template._id,
-    sharedWithUserIds: template.sharedWithUserIds,
-    ...normalized,
+    sourceTemplateId: template._id,
+    sharedWithUserIds: template.sharedWithUserIds.map((item) => new Types.ObjectId(item)),
+    content: normalized,
   });
 };
 
@@ -219,4 +242,41 @@ export const updateQuestionTemplateSharedUsernames = async (ownerId: string, tem
     .filter((user) => user._id.toString() !== ownerId)
     .map((user) => user.username)
     .sort((left, right) => left.localeCompare(right));
+};
+
+export const listQuestionTemplateVersions = async (ownerId: string, templateId: string) => {
+  const template = await getOwnedTemplateById(ownerId, templateId);
+  return QuestionTemplateModel.find({
+    ownerId: template.ownerId,
+    rootTemplateId: template.rootTemplateId,
+  }).sort({ version: -1, updatedAt: -1 });
+};
+
+export const restoreQuestionTemplateVersion = async (ownerId: string, templateId: string) => {
+  const template = await getOwnedTemplateById(ownerId, templateId);
+  const latestTemplate = await QuestionTemplateModel.findOne({
+    ownerId: template.ownerId,
+    rootTemplateId: template.rootTemplateId,
+  })
+    .sort({ version: -1 })
+    .lean();
+
+  const content = {
+    title: template.title,
+    description: template.description,
+    type: template.type,
+    isRequired: template.isRequired,
+    options: template.options.map((option) => ({ optionId: option.optionId, text: option.text })),
+    validation: template.validation ? { ...template.validation } : {},
+  };
+
+  return createNextTemplateVersion({
+    ownerId: template.ownerId,
+    rootTemplateId: template.rootTemplateId,
+    sourceTemplateId: template._id,
+    sharedWithUserIds: latestTemplate?.sharedWithUserIds
+      ? latestTemplate.sharedWithUserIds.map((item) => new Types.ObjectId(item))
+      : template.sharedWithUserIds.map((item) => new Types.ObjectId(item)),
+    content,
+  });
 };

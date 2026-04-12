@@ -8,7 +8,9 @@ import {
   createQuestionTemplate,
   deleteQuestionTemplate,
   getQuestionTemplateShares,
+  listQuestionTemplateVersions,
   listQuestionTemplates,
+  restoreQuestionTemplateVersion,
   updateQuestionTemplateShares,
   updateQuestionTemplate,
   type QuestionTemplatePayload,
@@ -89,9 +91,12 @@ export function QuestionBankPage() {
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [sharingTemplateId, setSharingTemplateId] = useState<string | null>(null);
+  const [historyTemplateId, setHistoryTemplateId] = useState<string | null>(null);
   const [sharingInput, setSharingInput] = useState('');
   const [sharingLoading, setSharingLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [sharedUsernamesByTemplate, setSharedUsernamesByTemplate] = useState<Record<string, string[]>>({});
+  const [versionHistoryByTemplate, setVersionHistoryByTemplate] = useState<Record<string, QuestionTemplateSummary[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionTemplatePayload>(createEmptyTemplateForm());
@@ -222,6 +227,39 @@ export function QuestionBankPage() {
       setError(err instanceof ApiClientError ? err.message : '更新共享设置失败');
     } finally {
       setSharingLoading(false);
+    }
+  };
+
+  const openHistoryPanel = async (templateId: string) => {
+    setError(null);
+    setInfoMessage(null);
+    setHistoryTemplateId(templateId);
+    setHistoryLoading(true);
+    try {
+      const versions = await listQuestionTemplateVersions(templateId);
+      setVersionHistoryByTemplate((current) => ({ ...current, [templateId]: versions }));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : '加载版本历史失败');
+      setHistoryTemplateId(null);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const restoreFromHistory = async (targetTemplateId: string, historyRootTemplateId: string) => {
+    setError(null);
+    setInfoMessage(null);
+    setHistoryLoading(true);
+    try {
+      const restored = await restoreQuestionTemplateVersion(targetTemplateId);
+      await reloadTemplates();
+      const versions = await listQuestionTemplateVersions(historyRootTemplateId);
+      setVersionHistoryByTemplate((current) => ({ ...current, [historyRootTemplateId]: versions }));
+      setInfoMessage(`已从历史版本恢复并生成新版本：${restored.title}（v${restored.version}）`);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : '恢复历史版本失败');
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -559,6 +597,12 @@ export function QuestionBankPage() {
                           共享
                         </SecondaryButton>
                         <SecondaryButton
+                          disabled={historyLoading && historyTemplateId === template._id}
+                          onClick={() => void openHistoryPanel(template._id)}
+                        >
+                          版本历史
+                        </SecondaryButton>
+                        <SecondaryButton
                           disabled={deletingTemplateId === template._id}
                           onClick={async () => {
                             if (!window.confirm('确认删除该题库题目吗？')) {
@@ -627,6 +671,44 @@ export function QuestionBankPage() {
                       >
                         取消
                       </SecondaryButton>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isOwner && historyTemplateId === template._id ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-2 text-sm font-medium text-slate-900">版本历史</div>
+                    {historyLoading ? (
+                      <div className="text-sm text-slate-700">正在加载版本历史…</div>
+                    ) : (versionHistoryByTemplate[template._id] ?? []).length === 0 ? (
+                      <div className="text-sm text-slate-700">暂无历史版本记录。</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {(versionHistoryByTemplate[template._id] ?? []).map((version) => (
+                          <div
+                            key={version._id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
+                          >
+                            <div className="text-sm text-slate-700">
+                              <span className="font-medium text-slate-900">v{version.version}</span> · {version.title}
+                              {version.previousTemplateId ? (
+                                <span className="ml-2 text-xs text-slate-500">来源版本ID：{version.previousTemplateId}</span>
+                              ) : (
+                                <span className="ml-2 text-xs text-slate-500">初始版本</span>
+                              )}
+                            </div>
+                            <SecondaryButton
+                              disabled={historyLoading}
+                              onClick={() => void restoreFromHistory(version._id, template._id)}
+                            >
+                              恢复为新版本
+                            </SecondaryButton>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-3">
+                      <SecondaryButton onClick={() => setHistoryTemplateId(null)}>关闭历史面板</SecondaryButton>
                     </div>
                   </div>
                 ) : null}

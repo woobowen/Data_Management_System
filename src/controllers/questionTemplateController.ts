@@ -7,7 +7,9 @@ import {
   deleteQuestionTemplate,
   getQuestionTemplateById,
   getQuestionTemplateSharedUsernames,
+  listQuestionTemplateVersions,
   listQuestionTemplates,
+  restoreQuestionTemplateVersion,
   updateQuestionTemplate,
   updateQuestionTemplateSharedUsernames,
 } from '../services/questionTemplateService';
@@ -81,5 +83,23 @@ export const updateQuestionTemplateSharesController = asyncHandler(async (req: R
       templateId: String(req.params.id),
       usernames,
     },
+  });
+});
+
+export const listQuestionTemplateVersionsController = asyncHandler(async (req: Request, res: Response) => {
+  const versions = await listQuestionTemplateVersions(req.user!.userId, String(req.params.id));
+  res.json({
+    code: 200,
+    message: '获取题目版本历史成功',
+    data: versions,
+  });
+});
+
+export const restoreQuestionTemplateVersionController = asyncHandler(async (req: Request, res: Response) => {
+  const template = await restoreQuestionTemplateVersion(req.user!.userId, String(req.params.id));
+  res.status(201).json({
+    code: 201,
+    message: '题目已恢复为新版本',
+    data: template,
   });
 });

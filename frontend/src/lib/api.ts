@@ -82,6 +82,7 @@ export type QuestionTemplateSummary = {
   ownerId: string;
   rootTemplateId: string;
   version: number;
+  previousTemplateId?: string | null;
   title: string;
   description: string;
   type: 'single_choice' | 'multi_choice' | 'text' | 'number';
@@ -263,6 +264,28 @@ export async function updateQuestionTemplateShares(templateId: string, usernames
     const response = await api.put<{ code: number; message: string; data: QuestionTemplateShareResult }>(
       `/api/questions/${templateId}/shares`,
       { usernames },
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function listQuestionTemplateVersions(templateId: string): Promise<QuestionTemplateSummary[]> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: QuestionTemplateSummary[] }>(
+      `/api/questions/${templateId}/versions`,
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function restoreQuestionTemplateVersion(templateId: string): Promise<QuestionTemplateSummary> {
+  try {
+    const response = await api.post<{ code: number; message: string; data: QuestionTemplateSummary }>(
+      `/api/questions/${templateId}/restore`,
     );
     return response.data.data;
   } catch (error) {

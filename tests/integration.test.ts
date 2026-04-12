@@ -275,6 +275,34 @@ describe('survey backend integration', () => {
     expect(oldVersionResponse.body.data.version).toBe(1);
     expect(oldVersionResponse.body.data.title).toBe('你的年龄');
 
+    const versionListResponse = await request(app)
+      .get(`/api/questions/${templateId}/versions`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+    expect(versionListResponse.body.data.map((item: { version: number }) => item.version)).toEqual([2, 1]);
+
+    const restoreResponse = await request(app)
+      .post(`/api/questions/${templateId}/restore`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(201);
+    const restoredTemplateId = restoreResponse.body.data._id;
+    expect(restoredTemplateId).not.toBe(templateId);
+    expect(restoredTemplateId).not.toBe(updatedTemplateId);
+    expect(restoreResponse.body.data.version).toBe(3);
+    expect(restoreResponse.body.data.previousTemplateId).toBe(templateId);
+    expect(restoreResponse.body.data.title).toBe('你的年龄');
+
+    const versionListAfterRestore = await request(app)
+      .get(`/api/questions/${templateId}/versions`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+    expect(versionListAfterRestore.body.data.map((item: { version: number }) => item.version)).toEqual([3, 2, 1]);
+
+    await request(app)
+      .delete(`/api/questions/${restoredTemplateId}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+
     await request(app)
       .delete(`/api/questions/${updatedTemplateId}`)
       .set('Authorization', `Bearer ${authToken}`)
