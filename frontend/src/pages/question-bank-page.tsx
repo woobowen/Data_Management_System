@@ -7,6 +7,7 @@ import {
   ApiClientError,
   createQuestionTemplate,
   deleteQuestionTemplate,
+  getQuestionTemplateCrossSurveyStatistics,
   getQuestionTemplateUsages,
   getQuestionTemplateShares,
   listQuestionTemplateVersions,
@@ -15,6 +16,7 @@ import {
   updateQuestionTemplateShares,
   updateQuestionTemplate,
   type QuestionTemplatePayload,
+  type QuestionTemplateCrossSurveyStatistics,
   type QuestionTemplateSummary,
   type QuestionTemplateUsageResult,
 } from '../lib/api';
@@ -58,6 +60,14 @@ function formatDateTime(value?: string) {
     return '未知时间';
   }
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
+}
+
+function getOptionLabel(template: QuestionTemplateSummary, optionId: string) {
+  const option = template.options.find((item) => item.optionId === optionId);
+  if (!option) {
+    return optionId;
+  }
+  return `${option.optionId}（${option.text}）`;
 }
 
 function renderValidationSummary(template: QuestionTemplateSummary) {
@@ -104,14 +114,17 @@ export function QuestionBankPage() {
   const [sharingTemplateId, setSharingTemplateId] = useState<string | null>(null);
   const [historyTemplateId, setHistoryTemplateId] = useState<string | null>(null);
   const [usageTemplateId, setUsageTemplateId] = useState<string | null>(null);
+  const [statisticsTemplateId, setStatisticsTemplateId] = useState<string | null>(null);
   const [sharingInput, setSharingInput] = useState('');
   const [sharingLoading, setSharingLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [statisticsLoading, setStatisticsLoading] = useState(false);
   const [historyRemarkByTemplate, setHistoryRemarkByTemplate] = useState<Record<string, string>>({});
   const [sharedUsernamesByTemplate, setSharedUsernamesByTemplate] = useState<Record<string, string[]>>({});
   const [versionHistoryByTemplate, setVersionHistoryByTemplate] = useState<Record<string, QuestionTemplateSummary[]>>({});
   const [usageByTemplate, setUsageByTemplate] = useState<Record<string, QuestionTemplateUsageResult>>({});
+  const [statisticsByTemplate, setStatisticsByTemplate] = useState<Record<string, QuestionTemplateCrossSurveyStatistics>>({});
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionTemplatePayload>(createEmptyTemplateForm());
@@ -297,6 +310,22 @@ export function QuestionBankPage() {
       setUsageTemplateId(null);
     } finally {
       setUsageLoading(false);
+    }
+  };
+
+  const openStatisticsPanel = async (templateId: string) => {
+    setError(null);
+    setInfoMessage(null);
+    setStatisticsTemplateId(templateId);
+    setStatisticsLoading(true);
+    try {
+      const statistics = await getQuestionTemplateCrossSurveyStatistics(templateId);
+      setStatisticsByTemplate((current) => ({ ...current, [templateId]: statistics }));
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : '加载跨问卷统计失败');
+      setStatisticsTemplateId(null);
+    } finally {
+      setStatisticsLoading(false);
     }
   };
 
@@ -602,6 +631,7 @@ export function QuestionBankPage() {
           {orderedTemplates.map((template) => {
             const isOwner = String(template.ownerId) === user?.id;
             const sharedUsernames = sharedUsernamesByTemplate[template._id] ?? [];
+            const templateStatistics = statisticsByTemplate[template._id];
 
             return (
               <PageCard key={template._id} className="p-6">
@@ -656,6 +686,12 @@ export function QuestionBankPage() {
                           onClick={() => void openUsagePanel(template._id)}
                         >
                           查看使用情况
+                        </SecondaryButton>
+                        <SecondaryButton
+                          disabled={statisticsLoading && statisticsTemplateId === template._id}
+                          onClick={() => void openStatisticsPanel(template._id)}
+                        >
+                          跨问卷统计
                         </SecondaryButton>
                         <SecondaryButton
                           disabled={deletingTemplateId === template._id}
@@ -815,6 +851,86 @@ export function QuestionBankPage() {
                     )}
                     <div className="mt-3">
                       <SecondaryButton onClick={() => setUsageTemplateId(null)}>关闭使用面板</SecondaryButton>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isOwner && statisticsTemplateId === template._id ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-2 text-sm font-medium text-slate-900">单题跨问卷统计</div>
+                    {statisticsLoading ? (
+                      <div className="text-sm text-slate-700">正在加载跨问卷统计…</div>
+                    ) : !templateStatistics ? (
+                      <div className="text-sm text-slate-700">暂无统计数据。</div>
+                    ) : (
+                      <div className="space-y-3 text-sm text-slate-700">
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          已覆盖 <span className="font-medium text-slate-900">{templateStatistics.surveyCount}</span>{' '}
+                          份问卷，<span className="font-medium text-slate-900">{templateStatistics.usageCount}</span>{' '}
+                          处题目引用，累计
+                          <span className="font-medium text-slate-900"> {templateStatistics.responseCount} </span>
+                          条有效答案。
+                        </div>
+
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="font-medium text-slate-900">答案类型分布</div>
+                          <div className="mt-1 grid gap-1 md:grid-cols-2">
+                            <div>单选：{templateStatistics.answerTypeCounts.single_choice}</div>
+                            <div>多选：{templateStatistics.answerTypeCounts.multi_choice}</div>
+                            <div>文本：{templateStatistics.answerTypeCounts.text}</div>
+                            <div>数字：{templateStatistics.answerTypeCounts.number}</div>
+                          </div>
+                        </div>
+
+                        {templateStatistics.optionCounts.length > 0 ? (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <div className="font-medium text-slate-900">选项统计</div>
+                            <ul className="mt-1 space-y-1">
+                              {templateStatistics.optionCounts.map((item) => (
+                                <li key={`${template._id}-stats-opt-${item.optionId}`}>
+                                  {getOptionLabel(template, item.optionId)}：{item.count}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {templateStatistics.average !== null ? (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            数值平均值：{templateStatistics.average.toFixed(2)}
+                          </div>
+                        ) : null}
+
+                        {templateStatistics.textValues.length > 0 ? (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <div className="font-medium text-slate-900">文本答案（跨问卷）</div>
+                            <ul className="mt-1 max-h-40 space-y-1 overflow-auto">
+                              {templateStatistics.textValues.map((value, index) => (
+                                <li key={`${template._id}-stats-text-${index}`} className="rounded bg-slate-50 px-2 py-1">
+                                  {value}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+
+                        {templateStatistics.usages.length > 0 ? (
+                          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <div className="font-medium text-slate-900">按问卷明细</div>
+                            <div className="mt-1 space-y-1">
+                              {templateStatistics.usages.map((usage) => (
+                                <div key={`${usage.surveyId}-${usage.questionId}-stat`} className="text-xs text-slate-600">
+                                  {usage.surveyTitle}（{usage.surveyStatus}）· questionId: {usage.questionId} · 答案数：
+                                  {usage.responseCount} · {usage.matchMode === 'template_id' ? '显式模板引用' : '历史数据推断'}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                    <div className="mt-3">
+                      <SecondaryButton onClick={() => setStatisticsTemplateId(null)}>关闭统计面板</SecondaryButton>
                     </div>
                   </div>
                 ) : null}

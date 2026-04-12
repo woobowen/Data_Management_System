@@ -5,10 +5,39 @@ import { z } from 'zod';
 import { ApiError } from '../lib/errors';
 import { questionTemplatePayloadSchema } from '../lib/schemas';
 import { QuestionTemplateModel } from '../models/QuestionTemplate';
+import { ResponseModel } from '../models/Response';
 import { SurveyModel } from '../models/Survey';
 import { UserModel } from '../models/User';
+import { QuestionType } from '../types/survey';
 
 type QuestionTemplatePayload = z.infer<typeof questionTemplatePayloadSchema>;
+
+type TemplateUsageMatchMode = 'template_id' | 'legacy_title_type';
+
+export type QuestionTemplateUsageItem = {
+  surveyId: string;
+  surveyTitle: string;
+  surveyStatus: 'draft' | 'published' | 'closed';
+  questionId: string;
+  questionTitle: string;
+  questionTemplateId: string | null;
+  questionTemplateVersion: number | null;
+  matchMode: TemplateUsageMatchMode;
+};
+
+export type QuestionTemplateCrossSurveyStatistics = {
+  templateId: string;
+  rootTemplateId: string;
+  templateType: QuestionType;
+  usageCount: number;
+  surveyCount: number;
+  responseCount: number;
+  answerTypeCounts: Record<QuestionType, number>;
+  optionCounts: Array<{ optionId: string; count: number }>;
+  average: number | null;
+  textValues: string[];
+  usages: Array<QuestionTemplateUsageItem & { responseCount: number }>;
+};
 
 const buildValidationByType = (payload: QuestionTemplatePayload) => {
   if (payload.type === 'multi_choice') {
@@ -149,6 +178,65 @@ const getOwnedTemplateById = async (ownerId: string, templateId: string) => {
   }
   return template;
 };
+
+const collectTemplateUsages = async (ownerId: string, templateId: string) => {
+  const template = await getOwnedTemplateById(ownerId, templateId);
+  const templatesInRoot = await QuestionTemplateModel.find({
+    ownerId: template.ownerId,
+    rootTemplateId: template.rootTemplateId,
+  })
+    .select({ _id: 1, version: 1, title: 1, type: 1 })
+    .lean();
+
+  const templateIdSet = new Set(templatesInRoot.map((item) => item._id.toString()));
+  const versionMap = new Map(templatesInRoot.map((item) => [item._id.toString(), item.version]));
+  const signatureSet = new Set(templatesInRoot.map((item) => `${item.title}::${item.type}`));
+  const ownerIdString = template.ownerId.toString();
+
+  const surveys = await SurveyModel.find({
+    $or: [
+      { questions: { $elemMatch: { questionTemplateId: { $in: [...templateIdSet] } } } },
+      { ownerId: template.ownerId, questions: { $elemMatch: { questionTemplateId: null, title: { $in: templatesInRoot.map((item) => item.title) } } } },
+    ],
+  })
+    .select({ title: 1, status: 1, ownerId: 1, questions: 1 })
+    .lean();
+
+  const usages: QuestionTemplateUsageItem[] = surveys.flatMap((survey) => {
+    const isSurveyOwnerSameAsTemplateOwner = survey.ownerId.toString() === ownerIdString;
+    return survey.questions.flatMap((question) => {
+      const hasTemplateRef = !!question.questionTemplateId && templateIdSet.has(question.questionTemplateId);
+      const matchesLegacySignature =
+        !question.questionTemplateId && isSurveyOwnerSameAsTemplateOwner && signatureSet.has(`${question.title}::${question.type}`);
+
+      if (!hasTemplateRef && !matchesLegacySignature) {
+        return [];
+      }
+
+      return [
+        {
+          surveyId: survey._id.toString(),
+          surveyTitle: survey.title,
+          surveyStatus: survey.status,
+          questionId: question.questionId,
+          questionTitle: question.title,
+          questionTemplateId: hasTemplateRef ? question.questionTemplateId! : null,
+          questionTemplateVersion: hasTemplateRef
+            ? versionMap.get(question.questionTemplateId!) ?? question.questionTemplateVersion ?? null
+            : null,
+          matchMode: hasTemplateRef ? 'template_id' : 'legacy_title_type',
+        },
+      ];
+    });
+  });
+
+  return {
+    template,
+    usages,
+  };
+};
+
+const usageKey = (surveyId: string, questionId: string) => `${surveyId}::${questionId}`;
 
 export const createQuestionTemplate = async (ownerId: string, payload: QuestionTemplatePayload) => {
   validateTemplatePayload(payload);
@@ -310,60 +398,150 @@ export const restoreQuestionTemplateVersion = async (ownerId: string, templateId
 };
 
 export const listQuestionTemplateUsages = async (ownerId: string, templateId: string) => {
-  const template = await getOwnedTemplateById(ownerId, templateId);
-  const templatesInRoot = await QuestionTemplateModel.find({
-    ownerId: template.ownerId,
-    rootTemplateId: template.rootTemplateId,
-  })
-    .select({ _id: 1, version: 1, title: 1, type: 1 })
-    .lean();
-
-  const templateIdSet = new Set(templatesInRoot.map((item) => item._id.toString()));
-  const versionMap = new Map(templatesInRoot.map((item) => [item._id.toString(), item.version]));
-  const signatureSet = new Set(templatesInRoot.map((item) => `${item.title}::${item.type}`));
-  const ownerIdString = template.ownerId.toString();
-
-  const surveys = await SurveyModel.find({
-    $or: [
-      { questions: { $elemMatch: { questionTemplateId: { $in: [...templateIdSet] } } } },
-      { ownerId: template.ownerId, questions: { $elemMatch: { questionTemplateId: null, title: { $in: templatesInRoot.map((item) => item.title) } } } },
-    ],
-  })
-    .select({ title: 1, status: 1, ownerId: 1, questions: 1 })
-    .lean();
-
-  const usages = surveys.flatMap((survey) => {
-    const isSurveyOwnerSameAsTemplateOwner = survey.ownerId.toString() === ownerIdString;
-    return survey.questions.flatMap((question) => {
-      const hasTemplateRef = !!question.questionTemplateId && templateIdSet.has(question.questionTemplateId);
-      const matchesLegacySignature =
-        !question.questionTemplateId && isSurveyOwnerSameAsTemplateOwner && signatureSet.has(`${question.title}::${question.type}`);
-
-      if (!hasTemplateRef && !matchesLegacySignature) {
-        return [];
-      }
-
-      return [
-        {
-          surveyId: survey._id.toString(),
-          surveyTitle: survey.title,
-          surveyStatus: survey.status,
-          questionId: question.questionId,
-          questionTitle: question.title,
-          questionTemplateId: hasTemplateRef ? question.questionTemplateId! : null,
-          questionTemplateVersion: hasTemplateRef
-            ? versionMap.get(question.questionTemplateId!) ?? question.questionTemplateVersion ?? null
-            : null,
-          matchMode: hasTemplateRef ? 'template_id' : 'legacy_title_type',
-        },
-      ];
-    });
-  });
+  const { template, usages } = await collectTemplateUsages(ownerId, templateId);
 
   return {
     templateId: template._id.toString(),
     rootTemplateId: template.rootTemplateId,
     usageCount: usages.length,
     usages,
+  };
+};
+
+export const getQuestionTemplateCrossSurveyStatistics = async (
+  ownerId: string,
+  templateId: string,
+): Promise<QuestionTemplateCrossSurveyStatistics> => {
+  const { template, usages } = await collectTemplateUsages(ownerId, templateId);
+
+  const distinctSurveyIds = [...new Set(usages.map((usage) => usage.surveyId))];
+  if (distinctSurveyIds.length === 0) {
+    return {
+      templateId: template._id.toString(),
+      rootTemplateId: template.rootTemplateId,
+      templateType: template.type,
+      usageCount: 0,
+      surveyCount: 0,
+      responseCount: 0,
+      answerTypeCounts: {
+        single_choice: 0,
+        multi_choice: 0,
+        text: 0,
+        number: 0,
+      },
+      optionCounts: [],
+      average: null,
+      textValues: [],
+      usages: [],
+    };
+  }
+
+  const usageMap = new Map<string, QuestionTemplateUsageItem>();
+  for (const usage of usages) {
+    usageMap.set(usageKey(usage.surveyId, usage.questionId), usage);
+  }
+
+  const responses = await ResponseModel.find({
+    surveyId: { $in: distinctSurveyIds.map((id) => new Types.ObjectId(id)) },
+    status: 'submitted',
+  })
+    .select({ surveyId: 1, answers: 1 })
+    .lean();
+
+  const answerTypeCounts: Record<QuestionType, number> = {
+    single_choice: 0,
+    multi_choice: 0,
+    text: 0,
+    number: 0,
+  };
+  const optionCountMap = new Map<string, number>();
+  const responseCountByUsage = new Map<string, number>();
+  const textValues: string[] = [];
+  let responseCount = 0;
+  let numberSum = 0;
+  let numberCount = 0;
+
+  for (const response of responses) {
+    const surveyId = response.surveyId.toString();
+    for (const answer of response.answers) {
+      const key = usageKey(surveyId, answer.questionId);
+      if (!usageMap.has(key)) {
+        continue;
+      }
+
+      responseCount += 1;
+      responseCountByUsage.set(key, (responseCountByUsage.get(key) ?? 0) + 1);
+
+      if (answer.type === 'single_choice') {
+        answerTypeCounts.single_choice += 1;
+        if (typeof answer.value === 'string') {
+          optionCountMap.set(answer.value, (optionCountMap.get(answer.value) ?? 0) + 1);
+        }
+        continue;
+      }
+
+      if (answer.type === 'multi_choice') {
+        answerTypeCounts.multi_choice += 1;
+        if (Array.isArray(answer.value)) {
+          for (const optionId of answer.value) {
+            if (typeof optionId === 'string') {
+              optionCountMap.set(optionId, (optionCountMap.get(optionId) ?? 0) + 1);
+            }
+          }
+        }
+        continue;
+      }
+
+      if (answer.type === 'text') {
+        answerTypeCounts.text += 1;
+        if (typeof answer.value === 'string') {
+          textValues.push(answer.value);
+        }
+        continue;
+      }
+
+      if (answer.type === 'number') {
+        answerTypeCounts.number += 1;
+        if (typeof answer.value === 'number' && Number.isFinite(answer.value)) {
+          numberSum += answer.value;
+          numberCount += 1;
+        }
+      }
+    }
+  }
+
+  const optionCounts = [...optionCountMap.entries()]
+    .map(([optionId, count]) => ({ optionId, count }))
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+      return left.optionId.localeCompare(right.optionId);
+    });
+
+  const usageStats = usages
+    .map((usage) => ({
+      ...usage,
+      responseCount: responseCountByUsage.get(usageKey(usage.surveyId, usage.questionId)) ?? 0,
+    }))
+    .sort((left, right) => {
+      if (right.responseCount !== left.responseCount) {
+        return right.responseCount - left.responseCount;
+      }
+      return left.surveyTitle.localeCompare(right.surveyTitle);
+    });
+
+  return {
+    templateId: template._id.toString(),
+    rootTemplateId: template.rootTemplateId,
+    templateType: template.type,
+    usageCount: usages.length,
+    surveyCount: distinctSurveyIds.length,
+    responseCount,
+    answerTypeCounts,
+    optionCounts,
+    average: numberCount > 0 ? numberSum / numberCount : null,
+    textValues,
+    usages: usageStats,
   };
 };

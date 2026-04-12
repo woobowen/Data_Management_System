@@ -5,6 +5,7 @@ import { questionTemplatePayloadSchema, restoreQuestionTemplateSchema, shareQues
 import {
   createQuestionTemplate,
   deleteQuestionTemplate,
+  getQuestionTemplateCrossSurveyStatistics,
   getQuestionTemplateById,
   getQuestionTemplateSharedUsernames,
   listQuestionTemplateUsages,
@@ -111,6 +112,15 @@ export const listQuestionTemplateUsagesController = asyncHandler(async (req: Req
   res.json({
     code: 200,
     message: '获取题目使用情况成功',
+    data,
+  });
+});
+
+export const getQuestionTemplateCrossSurveyStatisticsController = asyncHandler(async (req: Request, res: Response) => {
+  const data = await getQuestionTemplateCrossSurveyStatistics(req.user!.userId, String(req.params.id));
+  res.json({
+    code: 200,
+    message: '获取题目跨问卷统计成功',
     data,
   });
 });

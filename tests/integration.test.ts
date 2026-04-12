@@ -510,6 +510,122 @@ describe('survey backend integration', () => {
     expect(usageResponse.body.data.usages[0].questionTemplateId).toBeNull();
   });
 
+  it('can aggregate cross-survey statistics for a question template', async () => {
+    await request(app).post('/api/auth/register').send({ username: 'stats-owner', password: 'password123' }).expect(201);
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'stats-owner', password: 'password123' })
+      .expect(200);
+    const authToken = loginResponse.body.data.token;
+
+    const templateResponse = await request(app)
+      .post('/api/questions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(questionTemplatePayload)
+      .expect(201);
+    const templateId = templateResponse.body.data._id;
+    const templateVersion = templateResponse.body.data.version;
+
+    const createSurveyA = await request(app)
+      .post('/api/surveys')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: '统计问卷A',
+        description: '跨问卷统计A',
+        allowAnonymous: true,
+        deadlineAt: null,
+        questions: [
+          {
+            questionId: 'stats-q1',
+            type: 'number',
+            title: '你的年龄',
+            description: '',
+            isRequired: true,
+            order: 1,
+            options: [],
+            validation: { min: 0, max: 120, isInteger: true },
+            logicRules: [],
+            defaultNextQuestionId: 'END',
+            questionTemplateId: templateId,
+            questionTemplateVersion: templateVersion,
+          },
+        ],
+      })
+      .expect(201);
+
+    const createSurveyB = await request(app)
+      .post('/api/surveys')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        title: '统计问卷B',
+        description: '跨问卷统计B',
+        allowAnonymous: true,
+        deadlineAt: null,
+        questions: [
+          {
+            questionId: 'stats-q2',
+            type: 'number',
+            title: '你的年龄',
+            description: '',
+            isRequired: true,
+            order: 1,
+            options: [],
+            validation: { min: 0, max: 120, isInteger: true },
+            logicRules: [],
+            defaultNextQuestionId: 'END',
+            questionTemplateId: templateId,
+            questionTemplateVersion: templateVersion,
+          },
+        ],
+      })
+      .expect(201);
+
+    await request(app)
+      .post(`/api/surveys/${createSurveyA.body.data._id}/publish`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+    await request(app)
+      .post(`/api/surveys/${createSurveyB.body.data._id}/publish`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+
+    await request(app)
+      .post(`/api/surveys/${createSurveyA.body.data._id}/submit`)
+      .send({
+        answers: [{ questionId: 'stats-q1', type: 'number', value: 10 }],
+      })
+      .expect(201);
+    await request(app)
+      .post(`/api/surveys/${createSurveyA.body.data._id}/submit`)
+      .send({
+        answers: [{ questionId: 'stats-q1', type: 'number', value: 30 }],
+      })
+      .expect(201);
+    await request(app)
+      .post(`/api/surveys/${createSurveyB.body.data._id}/submit`)
+      .send({
+        answers: [{ questionId: 'stats-q2', type: 'number', value: 20 }],
+      })
+      .expect(201);
+
+    const statisticsResponse = await request(app)
+      .get(`/api/questions/${templateId}/statistics`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .expect(200);
+
+    expect(statisticsResponse.body.data.usageCount).toBe(2);
+    expect(statisticsResponse.body.data.surveyCount).toBe(2);
+    expect(statisticsResponse.body.data.responseCount).toBe(3);
+    expect(statisticsResponse.body.data.answerTypeCounts.number).toBe(3);
+    expect(statisticsResponse.body.data.average).toBe(20);
+    expect(statisticsResponse.body.data.optionCounts).toEqual([]);
+    expect(statisticsResponse.body.data.textValues).toEqual([]);
+    expect(statisticsResponse.body.data.usages).toHaveLength(2);
+    expect(
+      statisticsResponse.body.data.usages.map((item: { responseCount: number }) => item.responseCount).sort((a: number, b: number) => a - b),
+    ).toEqual([1, 2]);
+  });
+
   it('rejects invalid validation values', async () => {
     await bootstrapSurvey();
 

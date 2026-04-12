@@ -126,6 +126,25 @@ export type QuestionTemplateUsageResult = {
   usages: QuestionTemplateUsageItem[];
 };
 
+export type QuestionTemplateCrossSurveyStatistics = {
+  templateId: string;
+  rootTemplateId: string;
+  templateType: 'single_choice' | 'multi_choice' | 'text' | 'number';
+  usageCount: number;
+  surveyCount: number;
+  responseCount: number;
+  answerTypeCounts: {
+    single_choice: number;
+    multi_choice: number;
+    text: number;
+    number: number;
+  };
+  optionCounts: Array<{ optionId: string; count: number }>;
+  average: number | null;
+  textValues: string[];
+  usages: Array<QuestionTemplateUsageItem & { responseCount: number }>;
+};
+
 export type StatisticsQuestion = {
   questionId: string;
   type: string;
@@ -321,6 +340,19 @@ export async function getQuestionTemplateUsages(templateId: string): Promise<Que
   try {
     const response = await api.get<{ code: number; message: string; data: QuestionTemplateUsageResult }>(
       `/api/questions/${templateId}/usages`,
+    );
+    return response.data.data;
+  } catch (error) {
+    normalizeApiError(error);
+  }
+}
+
+export async function getQuestionTemplateCrossSurveyStatistics(
+  templateId: string,
+): Promise<QuestionTemplateCrossSurveyStatistics> {
+  try {
+    const response = await api.get<{ code: number; message: string; data: QuestionTemplateCrossSurveyStatistics }>(
+      `/api/questions/${templateId}/statistics`,
     );
     return response.data.data;
   } catch (error) {
